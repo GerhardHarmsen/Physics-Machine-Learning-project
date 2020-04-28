@@ -16,7 +16,7 @@ This function will run all the other procedures and produce all of the files tha
   * **DER_Delta_eta**: The difference in the pseudorapidity angle of the first and second jet.
   * **DER_Momentum_of_detected_Bosons**: Summed momentum of the Bosons.
   * **DER_Momentum_of_detected_Leptons**: Summed momentum of the detected Leptons.
-  * **Label_Unique_Mother_Particles**: This is a virtual quality but is currently used as a label for testing. (*I only have top top bar events so was looking at seeing if its possible to determine mother particles from the detected data.*)
+  * **Label**: This label determines if the partiucles of interest are in the current event. It returns 1 if it is a 'Signal' and 0 if it is a 'Background' event.
   
 ### CreateFile
 Uses the function **ConverttoText** to produce the first .csv file which converts the data in *unweighted_events.lhe* to a .csv  file which makes passing the data to a program much easier, as it has been formatted. It will also print out the total number of events found. The input for this function is *Folder_Selected*, which is the folder where the *"unweighted_events.lhe"* are located, even if they are in subfolders. Furthermore, this is where the *"LHEEventData.csv"* file will be saved. The format must be *"C:\\Path\To\Files\Folder_Selected"*.
