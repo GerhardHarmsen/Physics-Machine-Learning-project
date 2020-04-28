@@ -102,6 +102,7 @@ def ConvertoPseudorapidity(SelectedDirectory):
 def RecombineEvents(SelectedDirectory):
     PDGID_Lepton_List = [11, 12, 13, 14, 15, 16, 17, 18]
     PDGID_Boson_List =  [1, 2, 3, 4, 5, 6, 7, 8]
+     ParticleIDofinterest = [-6, 6]
     DataSet = pd.read_csv(SelectedDirectory + r"\PsuedoRapidityDataSet.csv")
     EventDataSet = {"EventID" : [],
                     "DER_No_Detected_Particles": [],
@@ -125,7 +126,7 @@ def RecombineEvents(SelectedDirectory):
         EventDataSet["DER_Delta_eta"].append(Temp.DER_Eta[Temp.IST == 1].iloc[0]  - Temp.DER_Eta[Temp.IST == 1].iloc[1])
         EventDataSet["DER_Momentum_of_detected_Quarks"].append(sum(Temp.DER_P_T[Temp.IST == 1 & abs(Temp.PDGID).isin([PDGID_Boson_List])]))
         EventDataSet["DER_Momentum_of_detected_Leptons"].append(sum(Temp.DER_P_T[Temp.IST == 1 & abs(Temp.PDGID).isin([PDGID_Lepton_List])]))
-        if 6 in list(Temp.PDGID[Temp.IST == 1]):
+        if any(item in list(Temp.PDGID[Temp.IST == 1]) for item in ParticleIDofinterest):
             EventDataSet['Label'].append(1)
         else:
              EventDataSet['Label'].append(0)
