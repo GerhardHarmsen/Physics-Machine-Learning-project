@@ -2,7 +2,7 @@
 """
 Created on Fri Mar 13 10:08:46 2020
 
-@author: gerha
+@author: Gerhard Erwin Harmsen
 """
 import os
 import csv
@@ -46,17 +46,17 @@ def CreateFile(Folder_selected):
     writer = csv.writer(NewFile)
     writer.writerow(["EventID","PDGID","IST","MOTH1","MOTH2","ICOL1","ICOL2","P1","P2","P3","P4","P5","VTIM","SPIN"])
     EventID = 1
+    
     for root, dirs, files in os.walk(Folder_selected):
       for name in files:
          if "unweighted_events.lhe" in os.path.join(root, name):
              if "unweighted_events.lhe.gz" not in os.path.join(root, name):
-                 #print(os.path.join(root, name))
                  NewEventID , WList = ConverttoText(os.path.join(root, name),EventID)
                  EventID = NewEventID
-                 print(EventID)
                  for item in WList:
                      writer.writerow(item)
-    print(EventID)                 
+                     
+    print("Number of events detected: {}".format(EventID -1))                 
     NewFile.close()
 
 
@@ -67,6 +67,7 @@ def ConverttoText(LHEFile, EventID):
     WriteList = []
     LocEventID = EventID
     pbar = tqdm(total = len(LineText), leave = None)
+    
     while len(LineText) !=1 :
         try:
             for x in LineText[LineText.index('<event>\n')+2:LineText.index('<mgrwt>\n')]:
@@ -98,7 +99,7 @@ def ConvertoPseudorapidity(SelectedDirectory):
     print(DataSet.head())   
     
     
-def recombineEvents(SelectedDirectory):
+def RecombineEvents(SelectedDirectory):
     PDGID_Lepton_List = [11, 12, 13, 14, 15, 16, 17, 18]
     PDGID_Boson_List =  [1, 2, 3, 4, 5, 6, 7, 8]
     DataSet = pd.read_csv(SelectedDirectory + r"\PsuedoRapidityDataSet.csv")
@@ -106,12 +107,12 @@ def recombineEvents(SelectedDirectory):
                     "DER_No_Detected_Particles": [],
                     "DER_No_unique_Particles":[],   
                     "DER_No_Leptons":[],
-                    "DER_No_Bosons":[],
+                    "DER_No_Quarks":[],
                     "DER_PT_Tot_Detected_Particles":[],
                     "DER_Delta_eta":[],
-                    "DER_Momentum_of_detected_Bosons":[],
+                    "DER_Momentum_of_detected_Quarks":[],
                     "DER_Momentum_of_detected_Leptons":[],
-                    "Label_Unique_Mother_Particles":[]}
+                    "Label" : []}
         
     for i in tqdm(np.unique(DataSet.EventID), leave = None):   
         Temp = DataSet[DataSet.EventID == i]
@@ -119,12 +120,15 @@ def recombineEvents(SelectedDirectory):
         EventDataSet["DER_No_Detected_Particles"].append(len(Temp[Temp.IST ==1 ]))
         EventDataSet["DER_No_unique_Particles"].append(len(np.unique(Temp[Temp.IST == 1])))
         EventDataSet["DER_No_Leptons"].append(len(Temp[Temp.IST == 1 & abs(Temp.PDGID).isin(PDGID_Lepton_List) ]))
-        EventDataSet["DER_No_Bosons"].append(len(Temp[Temp.IST == 1 & abs(Temp.PDGID).isin(PDGID_Boson_List) ]))
+        EventDataSet["DER_No_Quarks"].append(len(Temp[Temp.IST == 1 & abs(Temp.PDGID).isin(PDGID_Boson_List) ]))
         EventDataSet["DER_PT_Tot_Detected_Particles"].append(sum(Temp.DER_P_T[Temp.IST == 1]))
         EventDataSet["DER_Delta_eta"].append(Temp.DER_Eta[Temp.IST == 1].iloc[0]  - Temp.DER_Eta[Temp.IST == 1].iloc[1])
-        EventDataSet["DER_Momentum_of_detected_Bosons"].append(sum(Temp.DER_P_T[Temp.IST == 1 & abs(Temp.PDGID).isin([PDGID_Boson_List])]))
+        EventDataSet["DER_Momentum_of_detected_Quarks"].append(sum(Temp.DER_P_T[Temp.IST == 1 & abs(Temp.PDGID).isin([PDGID_Boson_List])]))
         EventDataSet["DER_Momentum_of_detected_Leptons"].append(sum(Temp.DER_P_T[Temp.IST == 1 & abs(Temp.PDGID).isin([PDGID_Lepton_List])]))
-        EventDataSet["Label_Unique_Mother_Particles"].append(np.unique(Temp.PDGID[Temp.IST == -1])[0])
+        if 6 in list(Temp.PDGID[Temp.IST == 1]):
+            EventDataSet['Label'].append(1)
+        else:
+             EventDataSet['Label'].append(0)
        
     
     df = pd.DataFrame(EventDataSet)
@@ -148,5 +152,5 @@ def RunAllconversions():
     print("Adding the derived features to the dataset.")
     ConvertoPseudorapidity(SelectedDirectory)        
     print("Combinig combining all sub events in the events dataset.")    
-    recombineEvents(SelectedDirectory)
+    RecombineEvents(SelectedDirectory)
         
