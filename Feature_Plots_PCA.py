@@ -69,7 +69,7 @@ def PCAAnalysis(DataSet, LabelOfInterest):
     print(DataSet2.describe())
     for col in np.unique(DataSet.columns):
         plt.figure(num =None, figsize = [20, 20])
-        boxplot1 = DataSet.boxplot(by = "Label_Unique_Mother_Particles", column = col)
+        boxplot1 = DataSet.boxplot(by = LabelOfInterest, column = col)
         plt.show()
     scalar = StandardScaler()
     scalar.fit(DataSet2)
