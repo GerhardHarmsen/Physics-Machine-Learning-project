@@ -102,7 +102,7 @@ def ConvertoPseudorapidity(SelectedDirectory):
 def RecombineEvents(SelectedDirectory):
     PDGID_Lepton_List = [11, 12, 13, 14, 15, 16, 17, 18]
     PDGID_Boson_List =  [1, 2, 3, 4, 5, 6, 7, 8]
-     ParticleIDofinterest = [-6, 6]
+    ParticleIDofinterest = [-6, 6]
     DataSet = pd.read_csv(SelectedDirectory + r"\PsuedoRapidityDataSet.csv")
     EventDataSet = {"EventID" : [],
                     "DER_No_Detected_Particles": [],
@@ -147,7 +147,7 @@ def RunAllconversions():
               if "unweighted_events.lhe.gz" not in os.path.join(root, name):   
                  i = i + 1
     assert(i != 0 ), "No data files. Ensure that you have selected a folder containing the files 'unweighted_events.lhe'."
-    print("Found {} data unweighted event files.".format(i))
+    print("Found {} data unweighted event files.\n".format(i))
     print("Converting txt file to csv format.")
     CreateFile(SelectedDirectory)  
     print("Adding the derived features to the dataset.")
