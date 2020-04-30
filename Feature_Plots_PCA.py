@@ -61,8 +61,11 @@ def PLTColumns(column1, column2):
 def FeaturePlots(DataSet):
     sns.pairplot(DataSet.loc[:,DataSet.dtypes == 'float64'])
     corr = DataSet.loc[:, DataSet.dtypes == 'float64'].corr()
+    plt.title('Linear correlation plot of the features in the dataset')
     plt.show()
     sns.heatmap(corr, xticklabels=corr.columns, yticklabels=corr.columns, cmap=sns.diverging_palette(220, 10, as_cmap=True))
+    plt.title('Heat map of the features showing linear correlation of the features')
+    plt.show()
 
 def PCAAnalysis(DataSet, LabelOfInterest):
     DataSet2 = DataSet.drop(labels = LabelOfInterest, axis = 1)
@@ -71,6 +74,7 @@ def PCAAnalysis(DataSet, LabelOfInterest):
         plt.figure(num =None, figsize = [20, 20])
         boxplot1 = DataSet.boxplot(by = LabelOfInterest, column = col)
         plt.show()
+    
     scalar = StandardScaler()
     scalar.fit(DataSet2)
     scaled_data =scalar.transform(DataSet2)
@@ -81,6 +85,7 @@ def PCAAnalysis(DataSet, LabelOfInterest):
     for g in tqdm(np.unique(DataSet[LabelOfInterest])):
         i = np.where(np.abs(DataSet[LabelOfInterest]) == g)
         plt.scatter(x_pca[i,0], x_pca[i,1], c = '#%06X' % randint(0, 0xFFFFFF), label = g )
+    plt.title('Principal Component plot of the data')
     plt.legend()
     plt.xlabel('First Principal Component')
     plt.ylabel('Second Principal Component')
@@ -94,6 +99,7 @@ def PCAAnalysis(DataSet, LabelOfInterest):
     ax.scatter(pca.components_[0,:],pca.components_[1,:])
     Circ = plt.Circle([0,0], radius = 1, fill = None)
     ax.add_patch(Circ)
+    plt.title('Weighting of the features in the dataset for the first and second prinipal componets')
     plt.xlabel('First Principal Component')
     plt.ylabel('Second Principal Component')
     ax.grid()
@@ -101,30 +107,4 @@ def PCAAnalysis(DataSet, LabelOfInterest):
     txt_width = 0.04*(plt.xlim()[1]- plt.xlim()[0])
     text_positions = get_text_positions(pca.components_[0,:],pca.components_[1,:],txt_width,txt_height)
     text_plotter(pca.components_[0,:], pca.components_[1,:], text_positions,updatedColumns , ax , txt_width,txt_height)
-
-def RunAnalysisForwJetDataBase():
-    DataSet = pd.read_csv(r"C:\Users\gerha\Google Drive\Research\Post Doc\Physics\ML TTBar\wJetPsuedoRapidityDataSet.csv")
-    DataSet = DataSet.replace(to_replace = [np.inf, -np.inf], value = np.nan)
-    DataSet = DataSet.dropna()
-    DataSet = DataSet[DataSet.IST == 1]
-    print(DataSet)
-    DataSet = DataSet.drop(columns = ["EventID", "IST", "MOTH1", "MOTH2", "VTIM", "SPIN", "ICOL1", "ICOL2"], axis = 1)
-    print(DataSet.head())
-    DataSet = DataSet.drop(columns = "P3", axis = 1)
-    print(DataSet.head())
-    FeaturePlots(DataSet)
-    PCAAnalysis(DataSet, "PGD")
-    
-def RunAnalysisForTauDataBase():
-    DataSet = pd.read_csv(r"C:\Users\gerha\Google Drive\Research\Post Doc\Physics\Tau DataSet\PsuedoRapidityDataSet.csv")
-    DataSet = DataSet.replace(to_replace = [np.inf, -np.inf], value = np.nan)
-    DataSet = DataSet.dropna()
-    DataSet = DataSet[DataSet.IST == 1]
-    print(DataSet)
-    DataSet = DataSet.drop(columns = ["EventID", "IST", "MOTH1", "MOTH2", "VTIM", "SPIN", "ICOL1", "ICOL2"], axis = 1)
-    print(DataSet.head())
-    DataSet = DataSet.drop(columns = "P3", axis = 1)
-    print(DataSet.head())
-    FeaturePlots(DataSet)
-    PCAAnalysis(DataSet, "PGD")    
     

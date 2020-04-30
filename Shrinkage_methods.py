@@ -245,39 +245,3 @@ def RunAllLinearModels(DataSet, Y):  #Y is the feature that we are trying to pre
     ResultsLARS(DataSet, Y)
     ResultsPCA(DataSet, Y)
     ResultsPartialLeastSquares(DataSet, Y)
-    
-def RunShrinkageForwJetDataBase():
-    DataSet = pd.read_csv(r"C:\Users\gerha\Google Drive\Research\Post Doc\Physics\ML TTBar\wJetPsuedoRapidityDataSet.csv")
-    DataSet = DataSet.replace(to_replace = [np.inf, -np.inf], value = np.nan)
-    DataSet = DataSet.dropna()
-    DataSet = DataSet[DataSet.IST == 1]
-    print(DataSet)
-    DataSet = DataSet.drop(columns = ["EventID", "IST", "MOTH1", "MOTH2", "VTIM", "SPIN", "ICOL1", "ICOL2"], axis = 1)
-    print(DataSet.head())
-    DataSet = DataSet.drop(columns = "P3", axis = 1)
-    print(DataSet.head())
-    Y = DataSet.PGD
-    Y = Y.replace(to_replace = [-22, -21, -15, -13, -12, -11, -5, 5, 11, 12, 13, 15, 21, 22], value = [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0])
-    DataSet = DataSet.drop(columns = "PGD", axis = 1)
-    print(DataSet.head())
-    print(Y.head())
-    ResultsLogisticRegression(DataSet, Y)
-    ResultsRFE(DataSet, Y)
-    
-def RunShrinkageForwTauDataBase():
-    DataSet = pd.read_csv(r"C:\Users\gerha\Google Drive\Research\Post Doc\Physics\Tau DataSet\PsuedoRapidityDataSet.csv")
-    DataSet = DataSet.replace(to_replace = [np.inf, -np.inf], value = np.nan)
-    DataSet = DataSet.dropna()
-    DataSet = DataSet[DataSet.IST == 1]
-    print(DataSet)
-    DataSet = DataSet.drop(columns = ["EventID", "IST", "MOTH1", "MOTH2", "VTIM", "SPIN", "ICOL1", "ICOL2"], axis = 1)
-    print(DataSet.head())
-    DataSet = DataSet.drop(columns = "P3", axis = 1)
-    print(DataSet.head())
-    Y = DataSet.PGD
-    Y = Y.replace(to_replace = [-23, -15, -13, -11, 11, 13, 15, 23], value = [0, 1, 0, 0, 0, 0, 1, 0])
-    DataSet = DataSet.drop(columns = "PGD", axis = 1)
-    print(DataSet.head())
-    print(Y.head())
-    ResultsLogisticRegression(DataSet, Y)
-    ResultsRFE(DataSet, Y)
