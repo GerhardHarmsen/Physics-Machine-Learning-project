@@ -154,4 +154,5 @@ def RunAllconversions():
     ConvertoPseudorapidity(SelectedDirectory)        
     print("Combinig combining all sub events in the events dataset.")    
     RecombineEvents(SelectedDirectory)
+    return SelectedDirectory
         
