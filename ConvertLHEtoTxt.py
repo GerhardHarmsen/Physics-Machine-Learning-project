@@ -41,6 +41,9 @@ def ValueEta(P1, P2, P3):
     CosTheta = P3/np.sqrt(P1**2  + P2**2 + P3**2)
     return -0.5*np.log((1-CosTheta)/(1+CosTheta))
 
+def ValueAzmithulAngle(P1, P2, P3, P_T):
+    return np.arcsin(P_T/np.sqrt(P1**2  + P2**2 + P3**2))
+
 def CreateFile(Folder_selected):
     NewFile = open(Folder_selected + r'\LHEEventData.csv','w+', newline='')
     writer = csv.writer(NewFile)
@@ -89,12 +92,14 @@ def ConverttoText(LHEFile, EventID):
 def ConvertoPseudorapidity(SelectedDirectory):
     DataSet = pd.read_csv(SelectedDirectory + r'\LHEEventData.csv' )
     print(DataSet.head())
-    Temp = np.zeros((len(DataSet),2))
+    Temp = np.zeros((len(DataSet),3))
     for i in tqdm(range(len(DataSet)), leave = None):
         Temp[i,0] = ValueP_T(DataSet.P1[i], DataSet.P2[i])
         Temp[i,1] = ValueEta(DataSet.P1[i],DataSet.P2[i], DataSet.P3[i])
+        Temp[i,2] = ValueAzmithulAngle(DataSet.P1[i], DataSet.P2[i], DataSet.P3[i], ValueP_T(DataSet.P1[i], DataSet.P2[i]))
     DataSet.insert(loc = len(DataSet.columns), column = "DER_P_T", value = Temp[:,0])
-    DataSet.insert(loc= len(DataSet.columns), column = "DER_Eta", value = Temp[:,1])    
+    DataSet.insert(loc = len(DataSet.columns), column = "DER_Eta", value = Temp[:,1])    
+    DataSet.insert(loc = len(DataSet.columns), column = "DER_Azmithul_Angle", value = [:,2])
     DataSet.to_csv(SelectedDirectory + r"\PsuedoRapidityDataSet.csv", index = False)
     print(DataSet.head())   
     
