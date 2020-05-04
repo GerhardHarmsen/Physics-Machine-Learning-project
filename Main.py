@@ -50,10 +50,14 @@ def ConvertAndAnalyse():
     if len(Y[Y == 1])/len(Y) < 0.3 or len(Y[Y == 1])/len(Y) > 0.7:
         if click.confirm('The dataset contains {}% signal data do you wish to continue?'.format((len(Y[Y == 1])/len(Y))*100)):
             LogisticResults, XGBoostResults = Analyse(DataSet, Y)
+            return LogisticResults, XGBoostResults
         
         else:
             pass
     else:
         print('Running analysis with {}% of dataset as signal.'.format((len(Y[Y == 1])/len(Y))*100))
         LogisticResults, XGBoostResults = Analyse(DataSet, Y)
+        return LogisticResults, XGBoostResults
+        
+        
     
