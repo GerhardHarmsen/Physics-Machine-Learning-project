@@ -99,24 +99,24 @@ def ConvertoPseudorapidity(SelectedDirectory):
         Temp[i,2] = ValueAzmithulAngle(DataSet.P1[i], DataSet.P2[i], DataSet.P3[i], ValueP_T(DataSet.P1[i], DataSet.P2[i]))
     DataSet.insert(loc = len(DataSet.columns), column = "DER_P_T", value = Temp[:,0])
     DataSet.insert(loc = len(DataSet.columns), column = "DER_Eta", value = Temp[:,1])    
-    DataSet.insert(loc = len(DataSet.columns), column = "DER_Azmithul_Angle", value = [:,2])
+    DataSet.insert(loc = len(DataSet.columns), column = "DER_Azmithul_Angle", value = Temp[:,2])
     DataSet.to_csv(SelectedDirectory + r"\PsuedoRapidityDataSet.csv", index = False)
     print(DataSet.head())   
     
     
 def RecombineEvents(SelectedDirectory):
     PDGID_Lepton_List = [11, 12, 13, 14, 15, 16, 17, 18]
-    PDGID_Boson_List =  [1, 2, 3, 4, 5, 6, 7, 8]
+    PDGID_Quark_List =  [1, 2, 3, 4, 5, 6, 7, 8]
+    PDGID_Boson_List = [9, 21, 22, 23, 24, 25, 37]
     ParticleIDofinterest = [-6, 6]
     DataSet = pd.read_csv(SelectedDirectory + r"\PsuedoRapidityDataSet.csv")
     EventDataSet = {"EventID" : [],
                     "DER_No_Detected_Particles": [],
-                    "DER_No_unique_Particles":[],   
+                    "DER_No_electrons": [],
+                    "DER_No_muons": [],
                     "DER_No_Leptons":[],
-                    "DER_No_Quarks":[],
                     "DER_PT_Tot_Detected_Particles":[],
-                    "DER_Delta_eta":[],
-                    "DER_Momentum_of_detected_Quarks":[],
+                    "DER_Missing_Momentum": [],
                     "DER_Momentum_of_detected_Leptons":[],
                     "Label" : []}
         
@@ -124,13 +124,12 @@ def RecombineEvents(SelectedDirectory):
         Temp = DataSet[DataSet.EventID == i]
         EventDataSet["EventID"].append(i)
         EventDataSet["DER_No_Detected_Particles"].append(len(Temp[Temp.IST ==1 ]))
-        EventDataSet["DER_No_unique_Particles"].append(len(np.unique(Temp[Temp.IST == 1])))
-        EventDataSet["DER_No_Leptons"].append(len(Temp[Temp.IST == 1 & abs(Temp.PDGID).isin(PDGID_Lepton_List) ]))
-        EventDataSet["DER_No_Quarks"].append(len(Temp[Temp.IST == 1 & abs(Temp.PDGID).isin(PDGID_Boson_List) ]))
-        EventDataSet["DER_PT_Tot_Detected_Particles"].append(sum(Temp.DER_P_T[Temp.IST == 1]))
-        EventDataSet["DER_Delta_eta"].append(Temp.DER_Eta[Temp.IST == 1].iloc[0]  - Temp.DER_Eta[Temp.IST == 1].iloc[1])
-        EventDataSet["DER_Momentum_of_detected_Quarks"].append(sum(Temp.DER_P_T[Temp.IST == 1 & abs(Temp.PDGID).isin([PDGID_Boson_List])]))
-        EventDataSet["DER_Momentum_of_detected_Leptons"].append(sum(Temp.DER_P_T[Temp.IST == 1 & abs(Temp.PDGID).isin([PDGID_Lepton_List])]))
+        EventDataSet["DER_No_electrons"].append(len(Temp[(Temp.IST == 1) & (abs(Temp.PDGID) == 11)]))
+        EventDataSet["DER_No_muons"].append(len(Temp[(Temp.IST == 1) & (abs(Temp.PDGID) == 13)]))
+        EventDataSet["DER_No_Leptons"].append(len(Temp[(Temp.IST == 1) & (abs(Temp.PDGID).isin(PDGID_Lepton_List) )]))
+        EventDataSet["DER_PT_Tot_Detected_Particles"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (abs(Temp.PDGID) != 12)]))
+        EventDataSet["DER_Missing_Momentum"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (abs(Temp.PDGID) == 12)]))
+        EventDataSet["DER_Momentum_of_detected_Leptons"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (abs(Temp.PDGID).isin([PDGID_Lepton_List]))]))
         if any(item in list(Temp.PDGID[Temp.IST == 1]) for item in ParticleIDofinterest):
             EventDataSet['Label'].append(1)
         else:
