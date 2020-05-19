@@ -122,6 +122,9 @@ def RecombineEvents(SelectedDirectory):
                     "DER_P_T_ratio_lep_pair" : [], 
                     "DER_Diff_Eta_lep_pair" : [],
                     "DER_Diff_Phi_lep_pair" : [],
+                    "DER_Diff_PT_lept_anti_lept" : [],
+                    "DER_Diff_Eta_lept_anti_lept" : [],
+                    "DER_Diff_Phi_lept_anti_lept" : [],
                     "PRI_Missing_pt" : [],
                     "Label" : []}
     for i in tqdm(np.unique(DataSet.EventID), leave = None):   
@@ -145,6 +148,10 @@ def RecombineEvents(SelectedDirectory):
             EventDataSet["DER_P_T_ratio_lep_pair"].append(Tst['DER_P_T'].iloc[0]/Tst['DER_P_T'].iloc[1])
             EventDataSet["DER_Diff_Eta_lep_pair"].append(abs(Tst['DER_Eta'].iloc[0] - Tst['DER_Eta'].iloc[1]))
             EventDataSet["DER_Diff_Phi_lep_pair"].append(abs(Tst['DER_Azmithul_Angle'].iloc[0] - Tst['DER_Azmithul_Angle'].iloc[1]))
+            ###Comaprison between the lepton and the anti-lepton, in the case there is one lepton####            
+            EventDataSet["DER_Diff_PT_lept_anti_lept"].append(np.nan)
+            EventDataSet["DER_Diff_Eta_lept_anti_lept"].append(np.nan)
+            EventDataSet["DER_Diff_Phi_lept_anti_lept"].append(np.nan)
         elif len(Tst) == 1:
             ###Values for leading and sub-leading leptons######
             EventDataSet["PRI_lep_leading_pt"].append(Tst['DER_P_T'].iloc[0])
@@ -159,7 +166,11 @@ def RecombineEvents(SelectedDirectory):
             EventDataSet["DER_P_T_ratio_lep_pair"].append(np.nan)
             EventDataSet["DER_Diff_Eta_lep_pair"].append(np.nan)
             EventDataSet["DER_Diff_Phi_lep_pair"].append(np.nan)
-        elif len(Tst) == 1:
+            ###Comaprison between the lepton and the anti-lepton, in the case there is one lepton####            
+            EventDataSet["DER_Diff_PT_lept_anti_lept"].append(abs(float(Temp.DER_P_T[Temp['PDGID'] == Tst['PDGID'].iloc[0]]) - float(Temp.DER_P_T[Temp['PDGID'] == -Tst['PDGID'].iloc[0]])))
+            EventDataSet["DER_Diff_Eta_lept_anti_lept"].append(abs(float(Temp.DER_Eta[Temp['PDGID'] == Tst['PDGID'].iloc[0]]) - float(Temp.DER_Eta[Temp['PDGID'] == -Tst['PDGID'].iloc[0]])))
+            EventDataSet["DER_Diff_Phi_lept_anti_lept"].append(abs(float(Temp.DER_Azmithul_Angle[Temp['PDGID'] == Tst['PDGID'].iloc[0]]) - float(Temp.DER_Azmithul_Angle[Temp['PDGID'] == -Tst['PDGID'].iloc[0]])))
+        elif len(Tst) == 0:
             ###Values for leading and sub-leading leptons######
             EventDataSet["PRI_lep_leading_pt"].append(np.nan)
             EventDataSet["PRI_lep_subleading_pt"].append(np.nan)
@@ -173,8 +184,12 @@ def RecombineEvents(SelectedDirectory):
             EventDataSet["DER_P_T_ratio_lep_pair"].append(np.nan)
             EventDataSet["DER_Diff_Eta_lep_pair"].append(np.nan)
             EventDataSet["DER_Diff_Phi_lep_pair"].append(np.nan)
+            ###Comaprison between the lepton and the anti-lepton, in the case there is one lepton####            
+            EventDataSet["DER_Diff_PT_lept_anti_lept"].append(np.nan)
+            EventDataSet["DER_Diff_Eta_lept_anti_lept"].append(np.nan)
+            EventDataSet["DER_Diff_Phi_lept_anti_lept"].append(np.nan)
         ###Missing Energy values#####
-        EventDataSet["PRI_Missing_pt"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (Temp.PGDID.isin(PDGID_Neutrino_List))]))
+        EventDataSet["PRI_Missing_pt"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (Temp.PDGID.isin(PDGID_Neutrino_List))]))
         
         if any(item in list(Temp.PDGID[Temp.IST == 1]) for item in ParticleIDofinterest):
             EventDataSet['Label'].append(1)

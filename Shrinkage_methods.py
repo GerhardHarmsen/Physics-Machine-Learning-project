@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import itertools
 import click
+import seaborn as sns
 from tqdm import tqdm
 
 from sklearn.model_selection import train_test_split
@@ -205,21 +206,20 @@ def ResultsRFE(DataSet, Y):
             print('')
       else :
             return
-    results = pd.DataFrame(columns=['num_features','features','Accuracy'])
+    results = pd.DataFrame(columns=['num_features','features','Accuracy', 'ConfusionMatrix'])
     for k in range(1, X_train.shape[1] + 1):
         for subset in tqdm(itertools.combinations(range(X_train.shape[1]), k), leave = None):
             subset = list(subset)
             logreg_model = LogisticRegression(fit_intercept = False)
             logreg_model.fit(X_train[X_train.columns[subset]], y_train)
             logreg_prediction = logreg_model.predict(X_test[X_test.columns[subset]])
-            #logreg_confusion = plot_confusion_matrix(logreg_model, X_test[X_test.columns[subset]], y_test,
-            #                     cmap=plt.cm.Blues,
-            #                     normalize = 'true')
+            logreg_confusion = confusion_matrix(y_test, logreg_prediction, normalize = 'true')
             logreg_Accuracy = logreg_model.score(X_test[X_test.columns[subset]], y_test)
             results = results.append(pd.DataFrame([{'num_features' : k,
                                                   'features' : DataSet.columns[subset],
                                                   'coeffs' : np.round(np.concatenate((logreg_model.coef_))),
-                                                  'Accuracy' : logreg_Accuracy}]))
+                                                  'Accuracy' : logreg_Accuracy,
+                                                  'ConfusionMatrix' : logreg_confusion}]))
             logreg_coeff = dict(zip(DataSet.columns[subset].tolist(),
                         np.round(np.concatenate((logreg_model.coef_), axis=None), 3)))
             #DictionaryPlot(logreg_coeff, 'Logistic Linear Regression')
@@ -229,13 +229,18 @@ def ResultsRFE(DataSet, Y):
     Features = {i : 0 for i in DataSet.columns}
     for x in range(len(results)):
         if results['Accuracy'][x] == BestScore:
+            sns.heatmap(results['ConfusionMatrix'][x], annot =True, cmap=plt.cm.Blues,)
+            plt.xlabel('Predicted Label')
+            plt.ylabel('True Label')
+            plt.title(dict(zip(results['features'][x],results['coeffs'][x])))
+            plt.show()
             #DictionaryPlot(dict(zip(results['features'][x].tolist(),results['coeffs'][x].tolist())), 'Logistic Linear Regression with accuracy {}'.format(results['Accuracy'][x]))
             #print('Features for top result :{}'.format(dict(zip(results['features'][x].tolist(),results['coeffs'][x].tolist()))))
             for i in range(len(results['features'][x])):
                 if results['coeffs'][x][i] != 0:
                    Features[results['features'][x][i]] = Features[results['features'][x][i]] + 1
                 
-    Features =Features = {k: v for k, v in sorted(Features.items(), key = lambda item: item[1], reverse = True)}  
+    Features = {k: v for k, v in sorted(Features.items(), key = lambda item: item[1], reverse = True)}  
     print(Features)  
     DictionaryPlot(Features, "Frequency of features in best models")
     return results 

@@ -33,15 +33,33 @@ def Analyse(DataSet, Labels):
     XGBoostResults = GXBoosterConfusionMAtrix.XGBoostersFeatureComparison(DataSet, Labels)
     return LogisticResults, XGBoostResults
 
+def TestForNanInDataSet(DataSet):
+    RemovalList = []
+    for column in DataSet.columns:
+      if (len(DataSet[column]) - DataSet[column].count()) > 0: 
+         print("{} has {} nan values.".format(column, len(DataSet[column]) - DataSet[column].count()))
+         RemovalList.append(column)
+    
+    if click.confirm('Nan values will prevent the analysis from completeing. Do you wish to remove the above listed columns?', default = False):
+       print("Removing selected feature columns.")
+       DataSet = DataSet.drop(labels = RemovalList, axis = 1)
+       return DataSet, True
+    else:   
+        return DataSet, False
 def ConvertAndAnalyse():
     SelectedDirectory = Convert()
         
     print('Extracting data from file EventData.csv')
     DataSet = pd.read_csv(SelectedDirectory + '/EventData.csv')
     DataSet = DataSet.drop(labels = 'EventID', axis = 1)
-    Feature_Plots_PCA.FeaturePlots(DataSet, 'Label')
-    Feature_Plots_PCA.PCAAnalysis(DataSet, 'Label')
-    
+    DataSet, FeatureTest = TestForNanInDataSet(DataSet)
+    if FeatureTest:
+        print("Performing feature analysis.")
+        Feature_Plots_PCA.FeaturePlots(DataSet, 'Label')
+        Feature_Plots_PCA.PCAAnalysis(DataSet, 'Label')
+    else:
+        print("DataSet contains Nan values, feature analysis will be skipped.")
+        
     print('Performing shrinkage analysis.')
     Y = DataSet.Label
     DataSet = DataSet.drop(labels = 'Label', axis = 1)
