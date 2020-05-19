@@ -199,6 +199,12 @@ def ResultsLogisticRegression(DataSet, Y):
 
 def ResultsRFE(DataSet, Y):
     X_train, X_test, y_train, y_test = train_test_split(DataSet, Y, train_size = 0.75)
+    if X_train.shape[1] > 16:
+      if click.confirm('This will consider {} combinations of the orginal features. Are you sure you want to continue?'.format(2**X_train.shape[1] -2), default = False):
+            print('Running Subset regression analysis')
+            print('')
+      else :
+            return
     results = pd.DataFrame(columns=['num_features','features','Accuracy'])
     for k in range(1, X_train.shape[1] + 1):
         for subset in tqdm(itertools.combinations(range(X_train.shape[1]), k), leave = None):

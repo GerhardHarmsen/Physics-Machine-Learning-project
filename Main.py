@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
 def Convert():
     SelectedDirectory = ConvertLHEtoTxt.RunAllconversions()
-    print('All conversion completed files "LHEEventData.csv", "PsuedoRapidityDataSet.csv", "EventData.csv" added to folder:{}'.format(SelectedDirectory))
+    print('All conversion completed files "LHEEventData.csv", "PsuedoRapidityDataSet.csv", "EventData.csv" added to folder: {}'.format(SelectedDirectory))
     return SelectedDirectory
 
 
@@ -39,7 +39,7 @@ def ConvertAndAnalyse():
     print('Extracting data from file EventData.csv')
     DataSet = pd.read_csv(SelectedDirectory + '/EventData.csv')
     DataSet = DataSet.drop(labels = 'EventID', axis = 1)
-    Feature_Plots_PCA.FeaturePlots(DataSet)
+    Feature_Plots_PCA.FeaturePlots(DataSet, 'Label')
     Feature_Plots_PCA.PCAAnalysis(DataSet, 'Label')
     
     print('Performing shrinkage analysis.')
