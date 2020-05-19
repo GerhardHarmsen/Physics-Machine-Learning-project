@@ -7,6 +7,7 @@ Created on Wed Apr  1 12:26:58 2020
 
 import pandas as pd
 import numpy as np
+import seaborn as sns
 from numpy import loadtxt
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
@@ -61,7 +62,7 @@ def XGBoostersFeatureComparison(DataSet, Y):
     seed = 7
     test_size = 0.33
     X_train, X_test, y_train, y_test = train_test_split(DataSet, Y, test_size=test_size, random_state=seed)
-    results = pd.DataFrame(columns=['num_features','features','Accuracy'])
+    results = pd.DataFrame(columns=['num_features','features','Accuracy', 'ConfusionMatrix'])
     print("Training models")
     model = XGBClassifier()
     if len(np.unique(Y)) == 2:
@@ -72,10 +73,12 @@ def XGBoostersFeatureComparison(DataSet, Y):
             y_pred = model.predict(X_test[X_test.columns[subset]])
             predictions = [value for value in y_pred]
             accuracy = accuracy_score(y_test, predictions)
+            XGBoost_confusion = confusion_matrix(y_test, y_pred, normalize = 'true')
             results = results.append(pd.DataFrame([{'num_features' : k,
                                                   'features' : DataSet.columns[subset],
                                                   'coeffs' : np.round(model.feature_importances_),
-                                                  'Accuracy' : accuracy}]))   
+                                                  'Accuracy' : accuracy,
+                                                  'ConfusionMatrix' : XGBoost_confusion}]))   
             
     else: 
         for k in range(1, X_train.shape[1] + 1):
@@ -85,15 +88,22 @@ def XGBoostersFeatureComparison(DataSet, Y):
                 y_pred = model.predict(X_test[X_test.columns[subset]])
                 predictions = [round(value) for value in y_pred]
                 accuracy = accuracy_score(y_test, predictions)
+                XGBoost_confusion = confusion_matrix(y_test, y_pred, normalize = 'true')
                 results = results.append(pd.DataFrame([{'num_features' : k,
                                                   'features' : DataSet.columns[subset],
                                                   'coeffs' : np.round(np.concatenate((model.feature_importances_))),
-                                                  'Accuracy' : accuracy}]))
+                                                  'Accuracy' : accuracy,
+                                                  'ConfusionMatrix' : XGBoost_confusion}]))
     results = results.sort_values('Accuracy').reset_index()
     BestScore = results['Accuracy'].max()
     Features = {i : 0 for i in DataSet.columns}
     for x in range(len(results)):
         if results['Accuracy'][x] == BestScore:
+            sns.heatmap(results['ConfusionMatrix'][x], annot =True, cmap=plt.cm.Blues,)
+            plt.xlabel('Predicted Label')
+            plt.ylabel('True Label')
+            plt.title(dict(zip(results['features'][x],results['coeffs'][x])))
+            plt.show()
             #DictionaryPlot(dict(zip(results['features'][x].tolist(),results['coeffs'][x].tolist())), 'Logistic Linear Regression with accuracy {}'.format(results['Accuracy'][x]))
             #print('Features for top result :{}'.format(dict(zip(results['features'][x].tolist(),results['coeffs'][x].tolist()))))
             for i in range(len(results['features'][x])):
