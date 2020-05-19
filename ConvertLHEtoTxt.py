@@ -105,31 +105,77 @@ def ConvertoPseudorapidity(SelectedDirectory):
     
     
 def RecombineEvents(SelectedDirectory):
-    PDGID_Lepton_List = [11, 12, 13, 14, 15, 16, 17, 18]
+    PDGID_Lepton_List = [11, 13, 15, 17]
     PDGID_Quark_List =  [1, 2, 3, 4, 5, 6, 7, 8]
     PDGID_Boson_List = [9, 21, 22, 23, 24, 25, 37]
-    ParticleIDofinterest = [-6, 6]
+    PDGID_Neutrino_List = [12, 14, 16, 18]
+    ParticleIDofinterest = [-1000022, 1000022]
     DataSet = pd.read_csv(SelectedDirectory + r"\PsuedoRapidityDataSet.csv")
     EventDataSet = {"EventID" : [],
-                    "DER_No_Detected_Particles": [],
-                    "DER_No_electrons": [],
-                    "DER_No_muons": [],
-                    "DER_No_Leptons":[],
-                    "DER_PT_Tot_Detected_Particles":[],
-                    "DER_Missing_Momentum": [],
-                    "DER_Momentum_of_detected_Leptons":[],
+                    "PRI_nleps" : [],
+                    "PRI_lep_leading_pt" : [],
+                    "PRI_lep_subleading_pt" : [],
+                    "PRI_lep_leading_eta" : [],
+                    "PRI_lep_subleading_eta" : [],
+                    "PRI_lep_leading_phi" : [],
+                    "PRI_lep_subleading_phi" : [],
+                    "DER_P_T_ratio_lep_pair" : [], 
+                    "DER_Diff_Eta_lep_pair" : [],
+                    "DER_Diff_Phi_lep_pair" : [],
+                    "PRI_Missing_pt" : [],
                     "Label" : []}
-        
     for i in tqdm(np.unique(DataSet.EventID), leave = None):   
         Temp = DataSet[DataSet.EventID == i]
         EventDataSet["EventID"].append(i)
-        EventDataSet["DER_No_Detected_Particles"].append(len(Temp[Temp.IST ==1 ]))
-        EventDataSet["DER_No_electrons"].append(len(Temp[(Temp.IST == 1) & (abs(Temp.PDGID) == 11)]))
-        EventDataSet["DER_No_muons"].append(len(Temp[(Temp.IST == 1) & (abs(Temp.PDGID) == 13)]))
-        EventDataSet["DER_No_Leptons"].append(len(Temp[(Temp.IST == 1) & (abs(Temp.PDGID).isin(PDGID_Lepton_List) )]))
-        EventDataSet["DER_PT_Tot_Detected_Particles"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (abs(Temp.PDGID) != 12)]))
-        EventDataSet["DER_Missing_Momentum"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (abs(Temp.PDGID) == 12)]))
-        EventDataSet["DER_Momentum_of_detected_Leptons"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (abs(Temp.PDGID).isin([PDGID_Lepton_List]))]))
+        ### Determing the values associated to the leading and sub-leading leptons###
+        Tst = Temp[(Temp.IST == 1) & (Temp.PDGID.isin(PDGID_Lepton_List))]
+        Tst = Tst.sort_values('DER_P_T', ascending = False)
+        EventDataSet["PRI_nleps"].append(len(Tst))
+        if len(Tst) >= 2:
+            ###Values for leading and sub-leading leptons######
+            EventDataSet["PRI_lep_leading_pt"].append(Tst['DER_P_T'].iloc[0])
+            EventDataSet["PRI_lep_subleading_pt"].append(Tst['DER_P_T'].iloc[1])
+            
+            EventDataSet["PRI_lep_leading_eta"].append(Tst['DER_Eta'].iloc[0])
+            EventDataSet["PRI_lep_subleading_eta"].append(Tst['DER_Eta'].iloc[1])
+            
+            EventDataSet["PRI_lep_leading_phi"].append(Tst['DER_Azmithul_Angle'].iloc[0])
+            EventDataSet["PRI_lep_subleading_phi"].append(Tst['DER_Azmithul_Angle'].iloc[1])
+            ###Comparisons between leading and sub-leading leptons#####
+            EventDataSet["DER_P_T_ratio_lep_pair"].append(Tst['DER_P_T'].iloc[0]/Tst['DER_P_T'].iloc[1])
+            EventDataSet["DER_Diff_Eta_lep_pair"].append(abs(Tst['DER_Eta'].iloc[0] - Tst['DER_Eta'].iloc[1]))
+            EventDataSet["DER_Diff_Phi_lep_pair"].append(abs(Tst['DER_Azmithul_Angle'].iloc[0] - Tst['DER_Azmithul_Angle'].iloc[1]))
+        elif len(Tst) == 1:
+            ###Values for leading and sub-leading leptons######
+            EventDataSet["PRI_lep_leading_pt"].append(Tst['DER_P_T'].iloc[0])
+            EventDataSet["PRI_lep_subleading_pt"].append(np.nan)
+            
+            EventDataSet["PRI_lep_leading_eta"].append(Tst['DER_Eta'].iloc[0])
+            EventDataSet["PRI_lep_subleading_eta"].append(np.nan)
+            
+            EventDataSet["PRI_lep_leading_phi"].append(Tst['DER_Azmithul_Angle'].iloc[0])
+            EventDataSet["PRI_lep_subleading_phi"].append(np.nan)
+            ###Comparisons between leading and sub-leading leptons#####
+            EventDataSet["DER_P_T_ratio_lep_pair"].append(np.nan)
+            EventDataSet["DER_Diff_Eta_lep_pair"].append(np.nan)
+            EventDataSet["DER_Diff_Phi_lep_pair"].append(np.nan)
+        elif len(Tst) == 1:
+            ###Values for leading and sub-leading leptons######
+            EventDataSet["PRI_lep_leading_pt"].append(np.nan)
+            EventDataSet["PRI_lep_subleading_pt"].append(np.nan)
+            
+            EventDataSet["PRI_lep_leading_eta"].append(np.nan)
+            EventDataSet["PRI_lep_subleading_eta"].append(np.nan)
+            
+            EventDataSet["PRI_lep_leading_phi"].append(np.nan)
+            EventDataSet["PRI_lep_subleading_phi"].append(np.nan)
+            ###Comparisons between leading and sub-leading leptons#####
+            EventDataSet["DER_P_T_ratio_lep_pair"].append(np.nan)
+            EventDataSet["DER_Diff_Eta_lep_pair"].append(np.nan)
+            EventDataSet["DER_Diff_Phi_lep_pair"].append(np.nan)
+        ###Missing Energy values#####
+        EventDataSet["PRI_Missing_pt"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (Temp.PGDID.isin(PDGID_Neutrino_List))]))
+        
         if any(item in list(Temp.PDGID[Temp.IST == 1]) for item in ParticleIDofinterest):
             EventDataSet['Label'].append(1)
         else:

@@ -58,12 +58,11 @@ def PLTColumns(column1, column2):
   ax.set_ylabel(ylabel = columnNames[column2])
   plt.show()
 
-def FeaturePlots(DataSet):
-    sns.pairplot(DataSet.loc[:,DataSet.dtypes == 'float64'])
-    corr = DataSet.loc[:, DataSet.dtypes == 'float64'].corr()
+def FeaturePlots(DataSet, LabelOfInterest):
+    sns.pairplot(DataSet, hue = LabelOfInterest)
     plt.title('Linear correlation plot of the features in the dataset')
     plt.show()
-    sns.heatmap(corr, xticklabels=corr.columns, yticklabels=corr.columns, cmap=sns.diverging_palette(220, 10, as_cmap=True))
+    sns.heatmap(DataSet.corr(), xticklabels=DataSet.columns, yticklabels=DataSet.columns, cmap=sns.diverging_palette(220, 10, as_cmap=True), annot = True)
     plt.title('Heat map of the features showing linear correlation of the features')
     plt.show()
 
