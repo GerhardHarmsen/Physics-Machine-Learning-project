@@ -106,4 +106,5 @@ def PCAAnalysis(DataSet, LabelOfInterest):
     txt_width = 0.04*(plt.xlim()[1]- plt.xlim()[0])
     text_positions = get_text_positions(pca.components_[0,:],pca.components_[1,:],txt_width,txt_height)
     text_plotter(pca.components_[0,:], pca.components_[1,:], text_positions,updatedColumns , ax , txt_width,txt_height)
+    plt.show()
     
