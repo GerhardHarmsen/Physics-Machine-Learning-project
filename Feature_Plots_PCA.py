@@ -62,14 +62,13 @@ def FeaturePlots(DataSet, LabelOfInterest):
     sns.pairplot(DataSet, hue = LabelOfInterest)
     plt.title('Linear correlation plot of the features in the dataset')
     plt.show()
-    sns.heatmap(DataSet.corr(), xticklabels=DataSet.columns, yticklabels=DataSet.columns, cmap=sns.diverging_palette(220, 10, as_cmap=True), annot = True)
+    sns.heatmap(DataSet.corr(), xticklabels=DataSet.columns, yticklabels=DataSet.columns, cmap=sns.diverging_palette(220, 10, as_cmap=True), annot = False)
     plt.title('Heat map of the features showing linear correlation of the features')
     plt.show()
 
 def PCAAnalysis(DataSet, LabelOfInterest):
     DataSet2 = DataSet.drop(labels = LabelOfInterest, axis = 1)
-    print(DataSet2.describe())
-    for col in np.unique(DataSet.columns):
+    for col in np.unique(DataSet2.columns):
         plt.figure(num =None, figsize = [20, 20])
         boxplot1 = DataSet.boxplot(by = LabelOfInterest, column = col)
         plt.show()
@@ -81,9 +80,9 @@ def PCAAnalysis(DataSet, LabelOfInterest):
     pca.fit(scaled_data)
     x_pca = pca.transform(scaled_data)
     plt.figure(num =None, figsize = [20, 20])   
-    for g in tqdm(np.unique(DataSet[LabelOfInterest])):
-        i = np.where(np.abs(DataSet[LabelOfInterest]) == g)
-        plt.scatter(x_pca[i,0], x_pca[i,1], c = '#%06X' % randint(0, 0xFFFFFF), label = g )
+    for g in np.unique(DataSet[LabelOfInterest]):
+        i = np.where(DataSet[LabelOfInterest] == g)
+        plt.scatter(x_pca[i,0], x_pca[i,1], label = g )
     plt.title('Principal Component plot of the data')
     plt.legend()
     plt.xlabel('First Principal Component')
