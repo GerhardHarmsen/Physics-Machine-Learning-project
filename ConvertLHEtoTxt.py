@@ -74,10 +74,12 @@ def ConverttoText(LHEFile, EventID):
     while len(LineText) !=1 :
         try:
             for x in LineText[LineText.index('<event>\n')+2:LineText.index('<mgrwt>\n')]:
-                WriteList.append([LocEventID] + ExtractInfo(x))
+               if "scales" not in x:
+                   WriteList.append([LocEventID] + ExtractInfo(x))
         except:
             for x in LineText[LineText.index('<event>\n')+2:LineText.index('</event>\n')]:
-                WriteList.append([LocEventID] + ExtractInfo(x))
+                if "scales" not in x :
+                    WriteList.append([LocEventID] + ExtractInfo(x))
         pbar.update(LineText.index('</event>\n') +1 - LineText.index('<event>\n'))
         del LineText[LineText.index('<event>\n'):LineText.index('</event>\n') +1] 
         LocEventID = LocEventID + 1   
@@ -113,6 +115,7 @@ def RecombineEvents(SelectedDirectory):
     DataSet = pd.read_csv(SelectedDirectory + r"\PsuedoRapidityDataSet.csv")
     EventDataSet = {"EventID" : [],
                     "PRI_nleps" : [],
+                    "PRI_jets" : [],
                     "PRI_lep_leading_pt" : [],
                     "PRI_lep_subleading_pt" : [],
                     "PRI_lep_leading_eta" : [],
@@ -122,15 +125,20 @@ def RecombineEvents(SelectedDirectory):
                     "DER_P_T_ratio_lep_pair" : [], 
                     "DER_Diff_Eta_lep_pair" : [],
                     "DER_Diff_Phi_lep_pair" : [],
+                    "DER_prodeta_lep" : [],
+                    "DER_sum_P_T": [],
                     "PRI_Missing_pt" : [],
                     "Label" : []}
     for i in tqdm(np.unique(DataSet.EventID), leave = None):   
         Temp = DataSet[DataSet.EventID == i]
         EventDataSet["EventID"].append(i)
+        EventDataSet["PRI_jets"].append(len(Temp[(Temp.IST == 1) & (abs(Temp.PDGID).isin(PDGID_Quark_List + PDGID_Boson_List))]))
+        EventDataSet["DER_sum_P_T"].append(sum(Temp.DER_P_T[Temp.IST ==  1]))
         ### Determing the values associated to the leading and sub-leading leptons###
         Tst = Temp[(Temp.IST == 1) & (abs(Temp.PDGID).isin(PDGID_Lepton_List))]
         Tst = Tst.sort_values('DER_P_T', ascending = False)
         EventDataSet["PRI_nleps"].append(len(Tst))
+
         if len(Tst) >= 2:
             ###Values for leading and sub-leading leptons######
             EventDataSet["PRI_lep_leading_pt"].append(Tst['DER_P_T'].iloc[0])
@@ -145,6 +153,8 @@ def RecombineEvents(SelectedDirectory):
             EventDataSet["DER_P_T_ratio_lep_pair"].append(Tst['DER_P_T'].iloc[0]/Tst['DER_P_T'].iloc[1])
             EventDataSet["DER_Diff_Eta_lep_pair"].append(abs(Tst['DER_Eta'].iloc[0] - Tst['DER_Eta'].iloc[1]))
             EventDataSet["DER_Diff_Phi_lep_pair"].append(abs(Tst['DER_Azmithul_Angle'].iloc[0] - Tst['DER_Azmithul_Angle'].iloc[1]))
+            EventDataSet["DER_prodeta_lep"].append(Tst['DER_Eta'].iloc[0] * Tst['DER_Eta'].iloc[1])
+            
             
         elif len(Tst) == 1:
             ###Values for leading and sub-leading leptons######
@@ -160,6 +170,8 @@ def RecombineEvents(SelectedDirectory):
             EventDataSet["DER_P_T_ratio_lep_pair"].append(np.nan)
             EventDataSet["DER_Diff_Eta_lep_pair"].append(np.nan)
             EventDataSet["DER_Diff_Phi_lep_pair"].append(np.nan)
+            EventDataSet["DER_prodeta_lep"].append(np.nan)
+            
         elif len(Tst) == 0:
             ###Values for leading and sub-leading leptons######
             EventDataSet["PRI_lep_leading_pt"].append(np.nan)
@@ -174,6 +186,8 @@ def RecombineEvents(SelectedDirectory):
             EventDataSet["DER_P_T_ratio_lep_pair"].append(np.nan)
             EventDataSet["DER_Diff_Eta_lep_pair"].append(np.nan)
             EventDataSet["DER_Diff_Phi_lep_pair"].append(np.nan)
+            EventDataSet["DER_prodeta_lep"].append(np.nan)
+
         ###Missing Energy values#####
         EventDataSet["PRI_Missing_pt"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (Temp.PDGID.isin(PDGID_Neutrino_List))]))
         

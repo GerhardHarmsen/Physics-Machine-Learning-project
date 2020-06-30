@@ -19,14 +19,34 @@ from tqdm import tqdm
 import itertools
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import plot_confusion_matrix
-
-paramList = {'max_depth' : 6,
-             'nthread' : -1,
-             'tree_method' : 'gpu_hist',
-             'ojective' : 'binary:logistic',
-             'base_score' : 0.5}
+import Feature_Plots_PCA
 
 
+def ValidationTest(DataSet, Y):
+    LstAccuracy = []
+    ValLambda =  range(1,10) 
+    for item in ValLambda:
+        paramList = {'max_depth' : 6,
+                     'nthread' : -1,
+                     'tree_method' : 'gpu_hist',
+                     'ojective' : 'binary:logistic',
+                     'base_score' : 0.2,
+                     'alpha' : 1 }
+        
+        seed = 7
+        test_size = 0.33
+        X_train, X_test, y_train, y_test = train_test_split(DataSet, Y, test_size=test_size, random_state=seed)
+        model = XGBClassifier(**paramList)
+        model.fit(X = X_train, y = y_train)
+        y_pred = model.predict(X_test)
+        predictions = [round(value) for value in y_pred]
+        LstAccuracy.append(accuracy_score(y_test, predictions))
+        
+    plt.plot(ValLambda,LstAccuracy)
+    print("Best value is {} with accuracy of {}".format(ValLambda[LstAccuracy.index(max(LstAccuracy))],max(LstAccuracy)))   
+        
+              
+        
 def DictionaryPlot(DictList, ChartName):
   plt.figure(figsize = (20, 20))
   plt.bar(range(len(DictList)),DictList.values()) 
@@ -36,14 +56,33 @@ def DictionaryPlot(DictList, ChartName):
   plt.show()
   
 def ConfusionMatrixPlot(ConfusionResults, ListFeatures, ListCoeffs):
-    fig = sns.heatmap(ConfusionResults, annot =True, cmap=plt.cm.Blues,)
+    fig = sns.heatmap(ConfusionResults, annot =True, cmap=plt.cm.Blues)
     plt.xlabel('Predicted Label')
     plt.ylabel('True Label')
     plt.title("Model: XGBoost \n Features: {}".format(dict(zip(ListFeatures,ListCoeffs))))
     plt.plot(fig)
     plt.show()
+    
+def ConfusionPairPlot(X_test, Y_test, model):
+    y_pred = model.predict(X_test)
+    Predictions = [round(value) for value in y_pred]
+    print(Predictions[20])
+    X_dev = X_test.copy()
+    for i in range(X_dev.shape[0]):
+        if Predictions[i] == 0 and Y_test.iloc[i] == 0:
+           Predictions[i] = 'True Negative'
+        elif Predictions[i] == 0 and Y_test.iloc[i] == 1:
+            Predictions[i] = 'False Negative'
+        elif Predictions[i] == 1 and Y_test.iloc[i] == 0:
+            Predictions[i] = 'False positive'
+        elif Predictions[i] == 1 and Y_test.iloc[i] == 1:
+            Predictions[i] = 'True positive'
+    
+    X_dev['Class'] = Predictions
+    Feature_Plots_PCA.FeaturePlots(X_dev, 'Class')
 
-def XGBoostersConfusionMatrix(DataSet, Y):
+    
+def XGBoostersConfusionMatrix(DataSet, Y, paramList):
     # split data into train and test sets
     seed = 7
     test_size = 0.33
@@ -62,12 +101,13 @@ def XGBoostersConfusionMatrix(DataSet, Y):
     GXBoost_confusion = plot_confusion_matrix(model, X_test, y_test,
                                  cmap=plt.cm.Blues,
                                  normalize = 'true')
+    plt.title("XGBoost")
+    plt.show()
     fig, ax = plt.subplots(figsize=(300, 300))
     plot_tree(model, num_trees=0, ax=ax, rankdir = 'LR')
     plt.show()
     for item in ['weight', 'gain', 'cover']:
         xgb.plot_importance(model, importance_type = item, title = 'Feature importance: {}'.format(item))
-        plt.rcParams['figure.figsize'] = [20,20]
         plt.show()
     
     model.get_booster().dump_model('XGBoost_model.txt', with_stats = True)
@@ -81,6 +121,7 @@ def XGBoostersConfusionMatrix(DataSet, Y):
     plt.ylabel('Relevance')
     plt.xticks(ticks = range(len(GXBoost_coeff)), labels = list(GXBoost_coeff.keys()), rotation=90)
     plt.show()
+    ConfusionPairPlot(X_test, y_test, model)
 
 
 def XGBoostersFeatureComparison(DataSet, Y):
@@ -90,6 +131,12 @@ def XGBoostersFeatureComparison(DataSet, Y):
     X_train, X_test, y_train, y_test = train_test_split(DataSet, Y, test_size=test_size, random_state=seed)
     results = pd.DataFrame(columns=['num_features','features','Accuracy', 'ConfusionMatrix'])
     print("Training models")
+    paramList = {'max_depth' : 6,
+                     'nthread' : -1,
+                     'tree_method' : 'gpu_hist',
+                     'ojective' : 'binary:logistic',
+                     'base_score' : 0.2,
+                     'alpha' : 1 }
     model = XGBClassifier(**paramList)
     if len(np.unique(Y)) == 2:
       for k in range(1, X_train.shape[1] + 1):

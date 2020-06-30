@@ -43,7 +43,6 @@ def ConfusionMatrixPlot(ConfusionResults, ListFeatures, ListCoeffs):
     plt.xlabel('Predicted Label')
     plt.ylabel('True Label')
     plt.title("Model: XGBoost \n Features: {}".format(dict(zip(ListFeatures,ListCoeffs))))
-    plt.plot(fig)
     plt.show() 
   
 def ResultsLinearRegression(DataSet, Y):
@@ -195,12 +194,14 @@ def ResultsPartialLeastSquares(DataSet, Y):
 
 def ResultsLogisticRegression(DataSet, Y):
     X_train, X_test, y_train, y_test = train_test_split(DataSet, Y, train_size = 0.75)
-    logreg_model = LogisticRegression(fit_intercept = True)
+    logreg_model = LogisticRegression(fit_intercept = False)
     logreg_model.fit(X_train, y_train)
     logreg_prediction = logreg_model.predict(X_test)
     logreg_confusion = plot_confusion_matrix(logreg_model, X_test, y_test,
                                  cmap=plt.cm.Blues,
                                  normalize = 'true')
+    plt.title("Logistic regression")
+    plt.show()
     logreg_coeff = dict(zip(DataSet.columns.tolist(),
                         np.round(np.concatenate((logreg_model.coef_), axis=None), 3)))
     print('Logistic Linear Regression coefficients:{}'.format(logreg_coeff))
@@ -218,7 +219,7 @@ def ResultsRFE(DataSet, Y):
     for k in range(1, X_train.shape[1] + 1):
         for subset in tqdm(itertools.combinations(range(X_train.shape[1]), k), leave = None):
             subset = list(subset)
-            logreg_model = LogisticRegression(fit_intercept = True)
+            logreg_model = LogisticRegression(fit_intercept = False)
             logreg_model.fit(X_train[X_train.columns[subset]], y_train)
             logreg_prediction = logreg_model.predict(X_test[X_test.columns[subset]])
             logreg_confusion = confusion_matrix(y_test, logreg_prediction, normalize = 'true')

@@ -1,0 +1,4 @@
+round_epochs,val_loss,val_acc,loss,acc,activation,batch_size,dropout,emb_output_dims,epochs,first_neuron,hidden_layers,last_activation,losses,lr,optimizer,shape,weight_regulizer
+5,0.4629700479105403,0.7313131093978882,0.46173759270040077,0.7332711,relu,2,0.0,None,5,4,0,sigmoid,binary_crossentropy,0.5,Adam,brick,None
+5,0.4672173592018219,0.7329797744750977,0.46439958123409797,0.73366916,relu,2,0.0,None,5,4,0,sigmoid,binary_crossentropy,0.95,Adam,brick,None
+5,0.4833923510211955,0.7191919088363647,0.48272169703042167,0.72037315,relu,2,0.0,None,5,4,0,sigmoid,binary_crossentropy,1.4,Adam,brick,None

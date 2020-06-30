@@ -39,12 +39,20 @@ def Analyse(DataSet, Labels, BlockFeatures):
             BlockFeatures = input("Please include a list of features to block from the analysis.")  
             
         else:
+            paramList = {'max_depth' : 6,
+                     'nthread' : -1,
+                     'tree_method' : 'gpu_hist',
+                     'ojective' : 'binary:logistic',
+                     'base_score' : 0.5,
+                     'alpha' : 0.1 }
             DataSet, FeatureTest = TestForNanInDataSet(DataSet)
-            XGBoostersConfusionMatrix(DataSet, Y)
-            ResultsLogisticRegression(DataSet, Y)
+            GXBoosterConfusionMAtrix.XGBoostersConfusionMatrix(DataSet, Labels, paramList)
+            Shrinkage_methods.ResultsLogisticRegression(DataSet, Labels)
             LogisticResults = Shrinkage_methods.ResultsRFE(DataSet, Labels)
             XGBoostResults = GXBoosterConfusionMAtrix.XGBoostersFeatureComparison(DataSet, Labels)
-            return LogisticResults, XGBoostResults
+            TALOSScanResults, BestResults = NeuralNetwork.NeuralNetScan(DataSet, Y)
+            print(BestResults)
+            return LogisticResults, XGBoostResults, TALOSScanResults
             break
 
 def TestForNanInDataSet(DataSet):
@@ -75,9 +83,6 @@ def ConvertAndAnalyse():
         print("Performing feature analysis.")
         Feature_Plots_PCA.FeaturePlots(DataSet, 'Label')
         Feature_Plots_PCA.PCAAnalysis(DataSet, 'Label')
-    else:
-        print("DataSet contains Nan values, feature analysis will be skipped.")
-        
     print('Performing shrinkage analysis.')
     Y = DataSet.Label
     DataSet = DataSet.drop(labels = 'Label', axis = 1)
@@ -92,7 +97,7 @@ def ConvertAndAnalyse():
             pass
     else:
         print('Running analysis with {}% of dataset as signal.'.format((len(Y[Y == 1])/len(Y))*100))
-        LogisticResults, XGBoostResults = Analyse(DataSet, Y)
+        LogisticResults, XGBoostResults = Analyse(DataSet, Y, [])
         return LogisticResults, XGBoostResults
         
         

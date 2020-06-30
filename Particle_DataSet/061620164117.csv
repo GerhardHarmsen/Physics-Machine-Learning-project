@@ -1,0 +1,5 @@
+round_epochs,val_loss,val_acc,loss,acc,activation,batch_size,dropout,emb_output_dims,epochs,first_neuron,hidden_layers,last_activation,losses,lr,optimizer,shape,weight_regulizer
+5,0.07984492595147605,0.7222222089767456,0.08005103915855659,0.7222761,relu,2,0.0,None,5,4,0,sigmoid,logcosh,0.5,Adam,brick,None
+5,0.07678180986281598,0.731641411781311,0.07653153196125481,0.73274875,relu,2,0.0,None,5,4,0,sigmoid,logcosh,0.5,Adam,long_funnel,None
+5,0.07684010722871983,0.7320454716682434,0.07678287490386868,0.7325249,relu,2,0.0,None,5,4,0,sigmoid,logcosh,0.5,Nadam,brick,None
+5,0.07682097261602229,0.7361363768577576,0.0770278493244553,0.73194027,relu,2,0.0,None,5,4,0,sigmoid,logcosh,0.5,Nadam,long_funnel,None
