@@ -15,6 +15,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from tqdm import tqdm
+import click
+
+TitleSize = 20
+FontSize  = 15
 
 def get_text_positions(x_data, y_data, txt_width, txt_height):
     a = list(zip(y_data, x_data))
@@ -38,7 +42,7 @@ def get_text_positions(x_data, y_data, txt_width, txt_height):
 def text_plotter(x_data, y_data, text_positions, labels, axis,txt_width,txt_height):
     i = 0
     for x,y,t in zip(x_data, y_data, text_positions):
-        axis.text(x - .03, 1.02*t, labels[i],rotation=0, color='black', fontsize=13)
+        axis.text(x - .03, 1.02*t, labels[i],rotation=0, color='black', fontsize=FontSize)
         i = i + 1
         if y != t:
             axis.arrow(x, t,0,y-t, color='black',alpha=0.2, width=txt_width*0.1,
@@ -54,8 +58,8 @@ def PLTColumns(column1, column2):
          YData.append(dtrain[i,column2])
   fig, ax = plt.subplots()
   fig = plt.scatter(XData,YData);
-  ax.set_xlabel(xlabel = columnNames[column1])
-  ax.set_ylabel(ylabel = columnNames[column2])
+  ax.set_xlabel(xlabel = columnNames[column1], fontsize = FontSize)
+  ax.set_ylabel(ylabel = columnNames[column2], fontsize = FontSize)
   plt.show()
 
 def FeaturePlots(DataSet, LabelOfInterest):
@@ -76,17 +80,27 @@ def PCAAnalysis(DataSet, LabelOfInterest):
     scalar = StandardScaler()
     scalar.fit(DataSet2)
     scaled_data =scalar.transform(DataSet2)
-    pca = PCA(n_components = 2)
+    #### Scree plots
+    pca = PCA(n_components= 6)
+    pca.fit_transform(DataSet2)
+    plt.plot(range(1,len(pca.explained_variance_ratio_)+1),pca.explained_variance_ratio_)
+    plt.title('Scree plot', fontsize = TitleSize)
+    plt.xlabel('Number of PCA components', fontsize = FontSize)
+    plt.ylabel('Eigenvalue', fontsize = FontSize)
+    plt.show()
+    ####
+    PCA_Num = click.prompt('From the screen plot how many PCA components would you like to use?', default = 2, type=int)
+    pca = PCA(n_components = PCA_Num)
     pca.fit(scaled_data)
     x_pca = pca.transform(scaled_data)
     plt.figure(num =None, figsize = [20, 20])   
     for g in np.unique(DataSet[LabelOfInterest]):
         i = np.where(DataSet[LabelOfInterest] == g)
         plt.scatter(x_pca[i,0], x_pca[i,1], label = g )
-    plt.title('Principal Component plot of the data')
+    plt.title('Principal Component plot of the data', fontsize = TitleSize)
     plt.legend()
-    plt.xlabel('First Principal Component')
-    plt.ylabel('Second Principal Component')
+    plt.xlabel('First Principal Component', fontsize = FontSize)
+    plt.ylabel('Second Principal Component', fontsize = FontSize)
     plt.show()      
     updatedColumns = list(DataSet2.columns)
     df_comp= pd.DataFrame(pca.components_,columns = updatedColumns)
@@ -97,9 +111,9 @@ def PCAAnalysis(DataSet, LabelOfInterest):
     ax.scatter(pca.components_[0,:],pca.components_[1,:])
     Circ = plt.Circle([0,0], radius = 1, fill = None)
     ax.add_patch(Circ)
-    plt.title('Weighting of the features in the dataset for the first and second prinipal componets')
-    plt.xlabel('First Principal Component')
-    plt.ylabel('Second Principal Component')
+    plt.title('Weighting of the features in the dataset for the first and second prinipal componets', fontsize = TitleSize)
+    plt.xlabel('First Principal Component', fontsize = FontSize)
+    plt.ylabel('Second Principal Component', fontsize = FontSize)
     ax.grid()
     txt_height = 0.04*(plt.ylim()[1] - plt.ylim()[0])
     txt_width = 0.04*(plt.xlim()[1]- plt.xlim()[0])
