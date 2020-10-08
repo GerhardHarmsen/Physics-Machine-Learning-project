@@ -7,7 +7,7 @@ This is a temporary script file.
 #User defined python files
 import ConvertLHEtoTxt
 import Feature_Plots_PCA
-import GXBoosterConfusionMAtrix
+import XGBoosterModel
 import Shrinkage_methods
 import NeuralNetwork
 #Python Modules
@@ -37,7 +37,7 @@ def Convert():
     return SelectedDirectory
 
 
-def Analyse(DataSet, Labels, BlockFeatures = []):
+def Analyse(DataSet, BlockFeatures = []):
     while True:
         try:
             DataSet = DataSet.drop(labels = BlockFeatures, axis = 1)
@@ -47,11 +47,13 @@ def Analyse(DataSet, Labels, BlockFeatures = []):
             BlockFeatures = input("Please include a list of features to block from the analysis.")  
             
         else:
-            paramList = GXBoosterConfusionMAtrix.HyperParameterTuning()
-            GXBoosterConfusionMAtrix.XGBoostersConfusionMatrix(DataSet, Labels, paramList)
+            DataSet = DataCuts(DataSet)
+            XGBModel = XGBoosterModel.TreeModel(DataSet)
+            XGBModel.HyperParameterTuning()
+            XGBModel.XGBoostTrain()
             Shrinkage_methods.ResultsLogisticRegression(DataSet, Labels)
             LogisticResults = Shrinkage_methods.ResultsRFE(DataSet, Labels)
-            XGBoostResults = GXBoosterConfusionMAtrix.XGBoostersFeatureComparison(DataSet, Labels)
+            XGBoostResults = XGBoosterModel.XGBoostersFeatureComparison(DataSet, Labels)
             TALOSScanResults, BestResults = NeuralNetwork.NeuralNetScan(DataSet, Labels)
             print(BestResults)
             return LogisticResults, XGBoostResults, TALOSScanResults
@@ -81,14 +83,14 @@ def DataCuts(DataSet):
     DataSet0 = DataSet[DataSet.PRI_jets == 0]
     DataSet1 = DataSet[(DataSet.PRI_jets == 1) & (DataSet.PRI_leading_jet_pt >= 25) & (abs(DataSet.PRI_leading_jet_eta) <= 2.5)]
     DataSet2 = DataSet[(DataSet.PRI_jets >= 2) & (DataSet.PRI_leading_jet_pt >= 25) & (abs(DataSet.PRI_leading_jet_eta) <= 2.5) & (DataSet.PRI_subleading_jet_pt >= 25) & (abs(DataSet.PRI_subleading_jet_eta) <= 2.5)]
-    print('{} events removed from the dataset'.format(len(DataSet)-len(pd.concat([DataSet0,DataSet1,DataSet2]))))
+    print('{} events removed from the dataset as the jets had a momentum lower than 25GeV or the psuedorapidity values of the jets was greater than 2.5.'.format(len(DataSet)-len(pd.concat([DataSet0,DataSet1,DataSet2]))))
     Dataset = pd.concat([DataSet0,DataSet1,DataSet2])
     ### Clean the leptonic signals to remove any soft leptons####
     DataSet0 = DataSet[DataSet.PRI_nleps == 0]
     DataSet1 = DataSet[(DataSet.PRI_nleps == 1) & (DataSet.PRI_lep_leading_pt >= 10) & (abs(DataSet.PRI_lep_leading_eta) <= 2.5)]
     DataSet2 = DataSet[(DataSet.PRI_nleps >= 2) & (DataSet.PRI_lep_leading_pt >= 10) & (abs(DataSet.PRI_lep_leading_eta) <= 2.5) & (DataSet.PRI_lep_subleading_pt >= 10) & (abs(DataSet.PRI_lep_subleading_eta) <= 2.5)]
+    print('{} events removed from the dataset as the leptons had a momentum less than 10GeV, or had a pseudorapidity of greater than 2.5. '.format(len(DataSet)-len(pd.concat([DataSet0,DataSet1,DataSet2]))))
     DataSet = pd.concat([DataSet0,DataSet1,DataSet2])
-    print('{} events removed from the dataset'.format(len(DataSet)-len(pd.concat([DataSet0,DataSet1,DataSet2]))))
     return DataSet
 
 
@@ -121,7 +123,7 @@ def ConvertAndAnalyse():
         
     print('Extracting data from file EventData.csv')
     DataSet = pd.read_csv(SelectedDirectory + '/EventData.csv')
-    DataSet = DataSet.drop(labels = ['EventID', 'Events_weight'], axis = 1)
+    DataSet = DataSet.drop(labels = ['EventID'], axis = 1)
     DataSet, FeatureTest = TestForNanInDataSet(DataSet)
     if FeatureTest:
         print("Performing feature analysis.")
@@ -129,19 +131,18 @@ def ConvertAndAnalyse():
         Feature_Plots_PCA.PCAAnalysis(DataSet, 'Label')
     print('Performing shrinkage analysis.')
     Y = DataSet.Label
-    DataSet = DataSet.drop(labels = 'Label', axis = 1)
     print('Example of the dataset')
     print(DataSet.head())
     if len(Y[Y == 1])/len(Y) < 0.3 or len(Y[Y == 1])/len(Y) > 0.7:
         if click.confirm('The dataset contains {}% signal data do you wish to continue?'.format((len(Y[Y == 1])/len(Y))*100)):
-            LogisticResults, XGBoostResults = Analyse(DataSet, Y, [])
+            LogisticResults, XGBoostResults = Analyse(DataSet, [])
             return LogisticResults, XGBoostResults
         
         else:
             pass
     else:
         print('Running analysis with {}% of dataset as signal.'.format((len(Y[Y == 1])/len(Y))*100))
-        LogisticResults, XGBoostResults = Analyse(DataSet, Y, [])
+        LogisticResults, XGBoostResults = Analyse(DataSet, [])
         return LogisticResults, XGBoostResults
         
         
