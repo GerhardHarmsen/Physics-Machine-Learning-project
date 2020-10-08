@@ -216,7 +216,7 @@ class TreeModel():
             AMSResults.append(self.Model.best_score)
         paramList['scale_pos_weight'] = sum_wneg/sum_wpos * AdjustWeights[AMSResults.index(max(AMSResults))]
         self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round,evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
-        self.ModelPredictions(self.TestingData.drop(['Label','Events_weight'],axis=1),self.TestingData.Label)
+        self.ModelPredictions(self.TestingData.drop(['Label'],axis=1),self.TestingData.Label)
         self.Model.save_model('XGBoostModelFile')
         self.TreeDiagram()
         self.ConfusionPairPlot(self.TestingData.drop(['Events_weight','Label'],axis=1), self.TestingData.Label)
