@@ -9,11 +9,11 @@ import csv
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import tkinter as tk
 from tkinter import filedialog as fd
 import multiprocessing as mp
 import uproot
 import click
+from multiprocessing import Pool, cpu_count
 
 NoofCPU = mp.cpu_count()
 cwd = os.getcwd()  # Get the current working directory (cwd)
@@ -59,7 +59,7 @@ def ROOTFILES(SelectedDirectory):
     
     print('Checking for ROOT files')
     i = 0 
-    for root, dirs, files in os.walk(r'S:\00Gerhard\SampleData'):
+    for root, dirs, files in os.walk(SelectedDirectory):
         if any(".root" in s for s in files):
             i = i + 1
     if i > 0:
@@ -264,18 +264,61 @@ def ConvertoPseudorapidity(SelectedDirectory):
     """
     DataSet = pd.read_csv(SelectedDirectory + r'\LHEEventData.csv' )
     print(DataSet.head())
-    Temp = np.zeros((len(DataSet),3))
-    for i in tqdm(range(len(DataSet)), leave = None):
-        Temp[i,0] = ValueP_T(DataSet.P1[i], DataSet.P2[i])
-        Temp[i,1] = ValueEta(DataSet.P1[i],DataSet.P2[i], DataSet.P3[i])
-        Temp[i,2] = ValueAzmithulAngle(DataSet.P1[i], DataSet.P2[i], DataSet.P3[i], ValueP_T(DataSet.P1[i], DataSet.P2[i]))
-    DataSet.insert(loc = len(DataSet.columns), column = "DER_P_T", value = Temp[:,0])
-    DataSet.insert(loc = len(DataSet.columns), column = "DER_Eta", value = Temp[:,1])    
-    DataSet.insert(loc = len(DataSet.columns), column = "DER_Azmithul_Angle", value = Temp[:,2])
+    DataSet['DER_P_T'] = ValueP_T(DataSet.P1, DataSet.P2)
+    DataSet['DER_Eta'] = ValueEta(DataSet.P1,DataSet.P2, DataSet.P3)
+    DataSet['DER_Azmithul_Angle'] = ValueAzmithulAngle(DataSet.P1, DataSet.P2, DataSet.P3, DataSet.DER_P_T)
     print('Finished adding pseudorapidities. Saving file....')
     DataSet.to_csv(SelectedDirectory + r"\PsuedoRapidityDataSet.csv", index = False)
     print(DataSet.head())   
+
+
+
+def CleanJets(DataSet):
+    Tst = pd.DataFrame(columns=DataSet.columns)
+    for _,k in DataSet[abs(DataSet.PDGID).isin([1, 2, 3, 4, 5, 6, 7, 8,21])].iterrows():
+        DeltaRList = list(np.sqrt((k['DER_Eta'] - DataSet['DER_Eta'][(abs(DataSet.PDGID) == 11)])**2 + (k['DER_Azmithul_Angle'] - DataSet['DER_Azmithul_Angle'][abs(DataSet.PDGID) == 11])**2))
+        if len(DeltaRList) > 0:
+            if min(DeltaRList) > 0.1:
+                Tst = Tst.append(k)
+        else:
+            Tst = Tst.append(k)
     
+    return Tst
+
+def CleanElectrons(DataSet):
+    Tst = pd.DataFrame(columns=DataSet.columns)
+    for _,k in DataSet[abs(DataSet.PDGID) == 11].iterrows():
+        DeltaRList = list(np.sqrt((k['DER_Eta'] - DataSet['DER_Eta'][(abs(DataSet.PDGID).isin([1, 2, 3, 4, 5, 6, 7, 8,21]) )])**2 + (k['DER_Azmithul_Angle'] - DataSet['DER_Azmithul_Angle'][abs(DataSet.PDGID).isin([1, 2, 3, 4, 5, 6, 7, 8,21]) ])**2))
+        if len(DeltaRList) > 0:
+            if min(DeltaRList) > 0.4:
+                Tst = Tst.append(k)
+        else:
+            Tst = Tst.append(k)
+    
+    return Tst
+
+def RemoveColinearEvents(DataSet):
+    DataSet1 = DataSet[(DataSet.IST == 1)]
+    Tst = DataSet1[~abs(DataSet1['PDGID']).isin([1, 2, 3, 4, 5, 6, 7, 8,21])]
+    n = cpu_count() * 10
+    print('Cleaning Data')
+    pool = Pool(n)
+    JetDataSet = pd.concat(pool.map(CleanJets, [DataSet1[DataSet1.EventID == k] for k in np.unique(DataSet1.EventID)]))
+    pool.close()
+    pool.join()
+    CleanedJetDataSet = pd.concat([Tst,JetDataSet])
+    print('Cleaned jets. Now cleaning the electron signals.')
+    Tst = CleanedJetDataSet[~abs(CleanedJetDataSet['PDGID']).isin([11])]
+    
+    pool = Pool(n)    
+    ElectronDataSet  = pd.concat(pool.map(CleanElectrons, [CleanedJetDataSet[CleanedJetDataSet.EventID == k] for k in np.unique(CleanedJetDataSet.EventID)]))
+    pool.close()
+    pool.join()
+    print('All events have been cleaned.')
+    CleanedDataSet =  pd.concat([Tst,ElectronDataSet])
+    return CleanedDataSet
+        
+def CombineEvent(DataSet)       
     
 def RecombineEvents(SelectedDirectory):
     """
@@ -317,6 +360,7 @@ def RecombineEvents(SelectedDirectory):
                     "PRI_Missing_pt" : [],
                     "Events_weight" : [],
                     "Label" : []}
+    DataSet = RemoveColinearEvents(DataSet)
     for i in tqdm(np.unique(DataSet.EventID), leave = None):   
         Temp = DataSet[DataSet.EventID == i]
         EventDataSet["EventID"].append(i)
@@ -516,3 +560,4 @@ def RunAllconversions():
         RecombineEvents(SelectedDirectory)
     return SelectedDirectory
         
+

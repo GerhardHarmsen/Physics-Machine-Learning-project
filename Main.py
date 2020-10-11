@@ -51,11 +51,11 @@ def Analyse(DataSet, BlockFeatures = []):
             XGBModel = XGBoosterModel.TreeModel(DataSet)
             XGBModel.HyperParameterTuning()
             XGBModel.XGBoostTrain()
-            Shrinkage_methods.ResultsLogisticRegression(DataSet, Labels)
-            LogisticResults = Shrinkage_methods.ResultsRFE(DataSet, Labels)
-            XGBoostResults = XGBoosterModel.XGBoostersFeatureComparison(DataSet, Labels)
-            TALOSScanResults, BestResults = NeuralNetwork.NeuralNetScan(DataSet, Labels)
-            print(BestResults)
+            #Shrinkage_methods.ResultsLogisticRegression(DataSet, Labels)
+            #LogisticResults = Shrinkage_methods.ResultsRFE(DataSet, Labels)
+            #XGBoostResults = XGBoosterModel.XGBoostersFeatureComparison(DataSet, Labels)
+            #TALOSScanResults, BestResults = NeuralNetwork.NeuralNetScan(DataSet, Labels)
+            #print(BestResults)
             return LogisticResults, XGBoostResults, TALOSScanResults
             break
 
