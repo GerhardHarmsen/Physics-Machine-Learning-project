@@ -126,7 +126,7 @@ class TreeModel():
         model = XGBClassifier(objective = "binary:logistic")
         randomized_mse = RandomizedSearchCV(estimator = model, 
                                             param_distributions=param_grid,
-                                            n_iter = NoofTests, scoring='roc_auc', 
+                                            n_iter = NoofTests, scoring='precision', 
                                             n_jobs =-1, cv=4, verbose = 1)
         randomized_mse.fit(self.TrainingData.drop(['Events_weight','Label'],axis=1), self.TrainingData.Label)
         print('Best parameters found: ', randomized_mse.best_params_)
@@ -203,7 +203,7 @@ class TreeModel():
         sum_wneg = sum( self.TrainingData.Events_weight.iloc[i] for i in range(len(self.TrainingData)) if self.TrainingData.Label.iloc[i] == 0.0  )
         print ('Weight statistics: wpos=%g, wneg=%g, ratio=%g' % ( sum_wpos, sum_wneg, sum_wneg/sum_wpos ))
         paramList = self.HyperParameters
-        paramList['eval_metric'] = ['auc','ams@0']
+        paramList['eval_metric'] = ['ams@0','error']
         paramList['tree_method'] ='gpu_hist'
         paramList['ojective'] = 'binary:logistic'
         watchlist = [(dtest,'eval'), (dtrain,'train')]
@@ -215,8 +215,8 @@ class TreeModel():
             self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round,evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
             AMSResults.append(self.Model.best_score)
         paramList['scale_pos_weight'] = sum_wneg/sum_wpos * AdjustWeights[AMSResults.index(max(AMSResults))]
-        self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round,evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
-        self.ModelPredictions(self.TestingData.drop(['Label','Events_weight'],axis=1),self.TestingData.Label)
+        self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round,evals = watchlist, early_stopping_rounds= 50, verbose_eval= True)
+        self.ModelPredictions(self.TestingData.drop(['Label'],axis=1),self.TestingData.Label)
         self.Model.save_model('XGBoostModelFile')
         self.TreeDiagram()
         self.ConfusionPairPlot(self.TestingData.drop(['Events_weight','Label'],axis=1), self.TestingData.Label)
@@ -229,7 +229,7 @@ class TreeModel():
         accuracy = accuracy_score(y_test, predictions)
         print("Accuracy: %.2f%%" % (accuracy * 100.0))
         GXBoost_confusion = confusion_matrix(y_test,predictions,normalize=None)
-        print('{} events misclassified as true with an ams score of {}'.format(GXBoost_confusion[0,1], self.Model.best_score))
+        print('{} events misclassified as true with an ams score of {}'.format(GXBoost_confusion[0,1], self.AMSScore(self.TrainingData.drop('Label',axis=1),self.TrainingData.Label)))
         sns.heatmap(GXBoost_confusion,annot=True)
         plt.xlabel('Predicted value')
         plt.ylabel('True value')
