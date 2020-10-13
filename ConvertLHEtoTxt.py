@@ -318,8 +318,7 @@ def RemoveColinearEvents(DataSet):
     CleanedDataSet =  pd.concat([Tst,ElectronDataSet])
     return CleanedDataSet
         
-def CombineEvent(DataSet)       
-    
+   
 def RecombineEvents(SelectedDirectory):
     """
     Comines all the particle decays in a particular event together. It then creates a csv file in the Selected Directory with all the combined events.

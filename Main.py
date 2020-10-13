@@ -56,7 +56,7 @@ def Analyse(DataSet, BlockFeatures = []):
             #XGBoostResults = XGBoosterModel.XGBoostersFeatureComparison(DataSet, Labels)
             #TALOSScanResults, BestResults = NeuralNetwork.NeuralNetScan(DataSet, Labels)
             #print(BestResults)
-            return LogisticResults, XGBoostResults, TALOSScanResults
+            return XGBModel
             break
 
 def TestForNanInDataSet(DataSet):
