@@ -15,7 +15,6 @@ import pandas as pd
 import numpy as np
 import click
 
-
 paramList = {'max_depth' : 6,
                      'nthread' : -1,
                      'tree_method' : 'gpu_hist',
@@ -51,14 +50,14 @@ def Analyse(DataSet, BlockFeatures = []):
             XGBModel = XGBoosterModel.TreeModel(DataSet)
             XGBModel.HyperParameterTuning()
             XGBModel.XGBoostTrain()
+            LogisticResults = Shrinkage_methods.ResultsRFE(DataSet, Labels)
             #Shrinkage_methods.ResultsLogisticRegression(DataSet, Labels)
             #LogisticResults = Shrinkage_methods.ResultsRFE(DataSet, Labels)
             #XGBoostResults = XGBoosterModel.XGBoostersFeatureComparison(DataSet, Labels)
             #TALOSScanResults, BestResults = NeuralNetwork.NeuralNetScan(DataSet, Labels)
             #print(BestResults)
             return XGBModel
-            break
-
+   
 def TestForNanInDataSet(DataSet):
     COUNT = 0
     for i in range(DataSet.shape[0]):
@@ -84,40 +83,19 @@ def DataCuts(DataSet):
     DataSet1 = DataSet[(DataSet.PRI_jets == 1) & (DataSet.PRI_leading_jet_pt >= 25) & (abs(DataSet.PRI_leading_jet_eta) <= 2.5)]
     DataSet2 = DataSet[(DataSet.PRI_jets >= 2) & (DataSet.PRI_leading_jet_pt >= 25) & (abs(DataSet.PRI_leading_jet_eta) <= 2.5) & (DataSet.PRI_subleading_jet_pt >= 25) & (abs(DataSet.PRI_subleading_jet_eta) <= 2.5)]
     print('{} events removed from the dataset as the jets had a momentum lower than 25GeV or the psuedorapidity values of the jets was greater than 2.5.'.format(len(DataSet)-len(pd.concat([DataSet0,DataSet1,DataSet2]))))
-    Dataset = pd.concat([DataSet0,DataSet1,DataSet2])
+    JetDataSet = pd.concat([DataSet0,DataSet1,DataSet2])
+    print(JetDataSet)
     ### Clean the leptonic signals to remove any soft leptons####
-    DataSet0 = DataSet[DataSet.PRI_nleps == 0]
-    DataSet1 = DataSet[(DataSet.PRI_nleps == 1) & (DataSet.PRI_lep_leading_pt >= 10) & (abs(DataSet.PRI_lep_leading_eta) <= 2.5)]
-    DataSet2 = DataSet[(DataSet.PRI_nleps >= 2) & (DataSet.PRI_lep_leading_pt >= 10) & (abs(DataSet.PRI_lep_leading_eta) <= 2.5) & (DataSet.PRI_lep_subleading_pt >= 10) & (abs(DataSet.PRI_lep_subleading_eta) <= 2.5)]
-    print('{} events removed from the dataset as the leptons had a momentum less than 10GeV, or had a pseudorapidity of greater than 2.5. '.format(len(DataSet)-len(pd.concat([DataSet0,DataSet1,DataSet2]))))
-    DataSet = pd.concat([DataSet0,DataSet1,DataSet2])
-    return DataSet
+    DataSet3 = JetDataSet[JetDataSet.PRI_nleps == 0]
+    DataSet4 = JetDataSet[(JetDataSet.PRI_nleps == 1) & (JetDataSet.PRI_lep_leading_pt >= 10) & (abs(JetDataSet.PRI_lep_leading_eta) <= 2.5)]
+    DataSet5 = JetDataSet[(JetDataSet.PRI_nleps >= 2) & (JetDataSet.PRI_lep_leading_pt >= 10) & (abs(JetDataSet.PRI_lep_leading_eta) <= 2.5) & (JetDataSet.PRI_lep_subleading_pt >= 10) & (abs(JetDataSet.PRI_lep_subleading_eta) <= 2.5)]
+    print('{} events removed from the dataset as the leptons had a momentum less than 10GeV, or had a pseudorapidity of greater than 2.5. '.format(len(JetDataSet)-len(pd.concat([DataSet3,DataSet4,DataSet5]))))
+    CleanedDataSet = pd.concat([DataSet3,DataSet4,DataSet5])
+    print(CleanedDataSet)
+    return CleanedDataSet
 
 
-def PreprocessData(DataSet, Label = 'Label'):
-    try :
-        DataSet = DataSet.drop(labels = 'EventID', axis = 1)
-    except:
-        print('EventIDs already removed')
-    try :
-        DataSet = DataSet.drop(labels = 'Events_weight', axis = 1)
-    except:
-        print('Event_weights already removed')
-        
-    DataSet = DataCuts(DataSet)
-    Feature_Plots_PCA.FeaturePlots(DataSet, Label)
-    try: 
-        DataSet.drop(labels = ['PRI_leading_jet_pt', 'PRI_subleading_jet_pt', 'PRI_leading_jet_eta', 
-       'PRI_subleading_jet_eta'], axis =1, inplace = True)
-        print('Removing jet related features')
-    except:
-        print('Unable to remove all jet related features')
-    DataSet, FeatureTest = TestForNanInDataSet(DataSet)
-    if FeatureTest:
-        print("Performing feature analysis.")
-        Feature_Plots_PCA.FeaturePlots(DataSet, 'Label')
-        Feature_Plots_PCA.PCAAnalysis(DataSet, 'Label')
-    
+   
 def ConvertAndAnalyse():
     SelectedDirectory = Convert()
         

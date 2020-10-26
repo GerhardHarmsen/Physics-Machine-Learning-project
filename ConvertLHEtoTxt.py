@@ -22,6 +22,142 @@ files = os.listdir(cwd)  # Get all the files in that directory
 
 Luminosity = 147 #Luminosity of the LHC as of August 2020
 
+
+def CleanJets(DataSet):
+    Tst = pd.DataFrame(columns=DataSet.columns)
+    for _,k in DataSet[abs(DataSet.PDGID).isin([1, 2, 3, 4, 5, 6, 7, 8,21])].iterrows():
+        DeltaRList = list(np.sqrt((k['DER_Eta'] - DataSet['DER_Eta'][(abs(DataSet.PDGID) == 11)])**2 + (k['DER_Azmithul_Angle'] - DataSet['DER_Azmithul_Angle'][abs(DataSet.PDGID) == 11])**2))
+        if len(DeltaRList) > 0:
+            if min(DeltaRList) > 0.1:
+                Tst = Tst.append(k)
+        else:
+            Tst = Tst.append(k)
+    
+    return Tst
+
+def CleanElectrons(DataSet):
+    Tst = pd.DataFrame(columns=DataSet.columns)
+    for _,k in DataSet[abs(DataSet.PDGID) == 11].iterrows():
+        DeltaRList = list(np.sqrt((k['DER_Eta'] - DataSet['DER_Eta'][(abs(DataSet.PDGID).isin([1, 2, 3, 4, 5, 6, 7, 8,21]) )])**2 + (k['DER_Azmithul_Angle'] - DataSet['DER_Azmithul_Angle'][abs(DataSet.PDGID).isin([1, 2, 3, 4, 5, 6, 7, 8,21]) ])**2))
+        if len(DeltaRList) > 0:
+            if min(DeltaRList) > 0.4:
+                Tst = Tst.append(k)
+        else:
+            Tst = Tst.append(k)
+    
+    return Tst
+
+def CombineEvents(DataSet):
+    PDGID_Lepton_List = [11, 13, 15, 17]
+    PDGID_Quark_List =  [1, 2, 3, 4, 5, 6, 7, 8]
+    PDGID_Boson_List = [9, 21, 22, 23, 24, 25, 37]
+    PDGID_Neutrino_List = [12, 14, 16, 18, 2000013, 1000022]
+    ParticleIDofinterest = [2000013, 1000022]
+    EventDataSet = {"EventID" : [],
+                    "PRI_nleps" : [],
+                    "PRI_jets" : [],
+                    "PRI_leading_jet_pt" : [],
+                    "PRI_subleading_jet_pt": [],
+                    "PRI_leading_jet_eta" : [],
+                    "PRI_subleading_jet_eta" : [],
+                    "PRI_lep_leading_pt" : [],
+                    "PRI_lep_subleading_pt" : [],
+                    "PRI_lep_leading_eta" : [],
+                    "PRI_lep_subleading_eta" : [],
+                    "PRI_lep_leading_phi" : [],
+                    "PRI_lep_subleading_phi" : [],
+                    "DER_P_T_ratio_lep_pair" : [], 
+                    "DER_Diff_Eta_lep_pair" : [],
+                    "DER_Diff_Phi_lep_pair" : [],
+                    "DER_sum_P_T": [],
+                    "PRI_Missing_pt" : [],
+                    "Events_weight" : [],
+                    "Label" : []}
+    
+    EventDataSet["EventID"].append(np.unique(DataSet.EventID)[0])
+    EventDataSet["Events_weight"].append(np.unique(DataSet.WEIGHT)[0])
+    EventDataSet["PRI_jets"].append(len(DataSet[abs(DataSet.PDGID).isin(PDGID_Quark_List + [21])]))
+    Tst = DataSet[(abs(DataSet.PDGID).isin(PDGID_Quark_List + [21]))]
+    Tst = Tst.sort_values('DER_P_T', ascending = False)
+    if len(Tst) >= 2:
+       EventDataSet["PRI_leading_jet_pt" ].append(Tst["DER_P_T"].iloc[0])
+       EventDataSet["PRI_subleading_jet_pt"].append(Tst["DER_P_T"].iloc[1])
+       EventDataSet["PRI_leading_jet_eta"].append(Tst['DER_Eta'].iloc[0])
+       EventDataSet["PRI_subleading_jet_eta"].append(Tst['DER_Eta'].iloc[1])
+    elif len(Tst) == 1:
+       EventDataSet["PRI_leading_jet_pt" ].append(Tst["DER_P_T"].iloc[0])
+       EventDataSet["PRI_subleading_jet_pt"].append(np.nan)
+       EventDataSet["PRI_leading_jet_eta"].append(Tst['DER_Eta'].iloc[0])
+       EventDataSet["PRI_subleading_jet_eta"].append(np.nan)
+    elif len(Tst) == 0:
+       EventDataSet["PRI_leading_jet_pt" ].append(np.nan)
+       EventDataSet["PRI_subleading_jet_pt"].append(np.nan)
+       EventDataSet["PRI_leading_jet_eta"].append(np.nan)
+       EventDataSet["PRI_subleading_jet_eta"].append(np.nan) 
+           
+    EventDataSet["DER_sum_P_T"].append(sum(DataSet.DER_P_T[abs(DataSet.PDGID).isin(PDGID_Quark_List + [21] + PDGID_Lepton_List)]))
+    ### Determing the values associated to the leading and sub-leading leptons###
+    Tst = DataSet[(abs(DataSet.PDGID).isin(PDGID_Lepton_List))]
+    Tst = Tst.sort_values('DER_P_T', ascending = False)
+    EventDataSet["PRI_nleps"].append(len(Tst))
+    if len(Tst) >= 2:
+            ###Values for leading and sub-leading leptons######
+            EventDataSet["PRI_lep_leading_pt"].append(Tst['DER_P_T'].iloc[0])
+            EventDataSet["PRI_lep_subleading_pt"].append(Tst['DER_P_T'].iloc[1])
+            
+            EventDataSet["PRI_lep_leading_eta"].append(Tst['DER_Eta'].iloc[0])
+            EventDataSet["PRI_lep_subleading_eta"].append(Tst['DER_Eta'].iloc[1])
+            
+            EventDataSet["PRI_lep_leading_phi"].append(Tst['DER_Azmithul_Angle'].iloc[0])
+            EventDataSet["PRI_lep_subleading_phi"].append(Tst['DER_Azmithul_Angle'].iloc[1])
+            ###Comparisons between leading and sub-leading leptons#####
+            EventDataSet["DER_P_T_ratio_lep_pair"].append(Tst['DER_P_T'].iloc[0]/Tst['DER_P_T'].iloc[1])
+            EventDataSet["DER_Diff_Eta_lep_pair"].append(abs(Tst['DER_Eta'].iloc[0] - Tst['DER_Eta'].iloc[1]))
+            EventDataSet["DER_Diff_Phi_lep_pair"].append(abs(Tst['DER_Azmithul_Angle'].iloc[0] - Tst['DER_Azmithul_Angle'].iloc[1]))
+            
+            
+    elif len(Tst) == 1:
+            ###Values for leading and sub-leading leptons######
+            EventDataSet["PRI_lep_leading_pt"].append(Tst['DER_P_T'].iloc[0])
+            EventDataSet["PRI_lep_subleading_pt"].append(np.nan)
+            
+            EventDataSet["PRI_lep_leading_eta"].append(Tst['DER_Eta'].iloc[0])
+            EventDataSet["PRI_lep_subleading_eta"].append(np.nan)
+            
+            EventDataSet["PRI_lep_leading_phi"].append(Tst['DER_Azmithul_Angle'].iloc[0])
+            EventDataSet["PRI_lep_subleading_phi"].append(np.nan)
+            ###Comparisons between leading and sub-leading leptons#####
+            EventDataSet["DER_P_T_ratio_lep_pair"].append(np.nan)
+            EventDataSet["DER_Diff_Eta_lep_pair"].append(np.nan)
+            EventDataSet["DER_Diff_Phi_lep_pair"].append(np.nan)
+            
+            
+    elif len(Tst) == 0:
+            ###Values for leading and sub-leading leptons######
+            EventDataSet["PRI_lep_leading_pt"].append(np.nan)
+            EventDataSet["PRI_lep_subleading_pt"].append(np.nan)
+            
+            EventDataSet["PRI_lep_leading_eta"].append(np.nan)
+            EventDataSet["PRI_lep_subleading_eta"].append(np.nan)
+            
+            EventDataSet["PRI_lep_leading_phi"].append(np.nan)
+            EventDataSet["PRI_lep_subleading_phi"].append(np.nan)
+            ###Comparisons between leading and sub-leading leptons#####
+            EventDataSet["DER_P_T_ratio_lep_pair"].append(np.nan)
+            EventDataSet["DER_Diff_Eta_lep_pair"].append(np.nan)
+            EventDataSet["DER_Diff_Phi_lep_pair"].append(np.nan)
+
+        ###Missing Energy values#####
+    EventDataSet["PRI_Missing_pt"].append(sum(DataSet.DER_P_T[(abs(DataSet.PDGID).isin(PDGID_Neutrino_List))]))
+        
+    if any(item in list(abs(DataSet.PDGID)) for item in ParticleIDofinterest):
+        EventDataSet['Label'].append(1)
+    else:
+        EventDataSet['Label'].append(0)
+       
+    
+    return pd.DataFrame(EventDataSet)
+
 def TESTFORLHE(SelectedDirectory):
     """Function for testing if there are LHE files in the selected directory. 
     
@@ -273,52 +409,32 @@ def ConvertoPseudorapidity(SelectedDirectory):
 
 
 
-def CleanJets(DataSet):
-    Tst = pd.DataFrame(columns=DataSet.columns)
-    for _,k in DataSet[abs(DataSet.PDGID).isin([1, 2, 3, 4, 5, 6, 7, 8,21])].iterrows():
-        DeltaRList = list(np.sqrt((k['DER_Eta'] - DataSet['DER_Eta'][(abs(DataSet.PDGID) == 11)])**2 + (k['DER_Azmithul_Angle'] - DataSet['DER_Azmithul_Angle'][abs(DataSet.PDGID) == 11])**2))
-        if len(DeltaRList) > 0:
-            if min(DeltaRList) > 0.1:
-                Tst = Tst.append(k)
-        else:
-            Tst = Tst.append(k)
-    
-    return Tst
-
-def CleanElectrons(DataSet):
-    Tst = pd.DataFrame(columns=DataSet.columns)
-    for _,k in DataSet[abs(DataSet.PDGID) == 11].iterrows():
-        DeltaRList = list(np.sqrt((k['DER_Eta'] - DataSet['DER_Eta'][(abs(DataSet.PDGID).isin([1, 2, 3, 4, 5, 6, 7, 8,21]) )])**2 + (k['DER_Azmithul_Angle'] - DataSet['DER_Azmithul_Angle'][abs(DataSet.PDGID).isin([1, 2, 3, 4, 5, 6, 7, 8,21]) ])**2))
-        if len(DeltaRList) > 0:
-            if min(DeltaRList) > 0.4:
-                Tst = Tst.append(k)
-        else:
-            Tst = Tst.append(k)
-    
-    return Tst
-
 def RemoveColinearEvents(DataSet):
     DataSet1 = DataSet[(DataSet.IST == 1)]
     Tst = DataSet1[~abs(DataSet1['PDGID']).isin([1, 2, 3, 4, 5, 6, 7, 8,21])]
-    n = cpu_count() * 10
+    n = cpu_count()
     print('Cleaning Data')
-    pool = Pool(n)
-    JetDataSet = pd.concat(pool.map(CleanJets, [DataSet1[DataSet1.EventID == k] for k in np.unique(DataSet1.EventID)]))
+    with Pool(n) as pool:
+         JetDataSet = pd.concat(tqdm(pool.imap(CleanJets, [group for _, group in DataSet1.groupby(by='EventID')]),total=len(np.unique(DataSet1.EventID))))
     pool.close()
     pool.join()
     CleanedJetDataSet = pd.concat([Tst,JetDataSet])
     print('Cleaned jets. Now cleaning the electron signals.')
     Tst = CleanedJetDataSet[~abs(CleanedJetDataSet['PDGID']).isin([11])]
-    
-    pool = Pool(n)    
-    ElectronDataSet  = pd.concat(pool.map(CleanElectrons, [CleanedJetDataSet[CleanedJetDataSet.EventID == k] for k in np.unique(CleanedJetDataSet.EventID)]))
+    with Pool(n) as pool:
+         ElectronDataSet  = pd.concat(tqdm(pool.imap(CleanElectrons,  [group for _, group in CleanedJetDataSet.groupby(by='EventID')]),total=len(np.unique(CleanedJetDataSet.EventID))))
     pool.close()
     pool.join()
     print('All events have been cleaned.')
     CleanedDataSet =  pd.concat([Tst,ElectronDataSet])
     return CleanedDataSet
+
+  
+
+
+    
+    
         
-   
 def RecombineEvents(SelectedDirectory):
     """
     Comines all the particle decays in a particular event together. It then creates a csv file in the Selected Directory with all the combined events.
@@ -333,124 +449,37 @@ def RecombineEvents(SelectedDirectory):
     None.
 
     """
-    PDGID_Lepton_List = [11, 13, 15, 17]
-    PDGID_Quark_List =  [1, 2, 3, 4, 5, 6, 7, 8]
-    PDGID_Boson_List = [9, 21, 22, 23, 24, 25, 37]
-    PDGID_Neutrino_List = [12, 14, 16, 18, -1000022, 1000022]
-    ParticleIDofinterest = [-1000022, 1000022]
     DataSet = pd.read_csv(SelectedDirectory + r"\PsuedoRapidityDataSet.csv")
-    EventDataSet = {"EventID" : [],
-                    "PRI_nleps" : [],
-                    "PRI_jets" : [],
-                    "PRI_leading_jet_pt" : [],
-                    "PRI_subleading_jet_pt": [],
-                    "PRI_leading_jet_eta" : [],
-                    "PRI_subleading_jet_eta" : [],
-                    "PRI_lep_leading_pt" : [],
-                    "PRI_lep_subleading_pt" : [],
-                    "PRI_lep_leading_eta" : [],
-                    "PRI_lep_subleading_eta" : [],
-                    "PRI_lep_leading_phi" : [],
-                    "PRI_lep_subleading_phi" : [],
-                    "DER_P_T_ratio_lep_pair" : [], 
-                    "DER_Diff_Eta_lep_pair" : [],
-                    "DER_Diff_Phi_lep_pair" : [],
-                    "DER_sum_P_T": [],
-                    "PRI_Missing_pt" : [],
-                    "Events_weight" : [],
-                    "Label" : []}
+    DataSet = DataSet[DataSet.IST == 1]
     DataSet = RemoveColinearEvents(DataSet)
-    for i in tqdm(np.unique(DataSet.EventID), leave = None):   
-        Temp = DataSet[DataSet.EventID == i]
-        EventDataSet["EventID"].append(i)
-        EventDataSet["Events_weight"].append(np.unique(DataSet['WEIGHT'][DataSet.EventID == i])[0])
-        EventDataSet["PRI_jets"].append(len(Temp[(Temp.IST == 1) & (abs(Temp.PDGID).isin(PDGID_Quark_List + [21]))]))
-        Tst = Temp[(Temp.IST == 1) & (abs(Temp.PDGID).isin(PDGID_Quark_List + [21]))]
-        Tst = Tst.sort_values('DER_P_T', ascending = False)
-        if len(Tst) >= 2:
-           EventDataSet["PRI_leading_jet_pt" ].append(Tst["DER_P_T"].iloc[0])
-           EventDataSet["PRI_subleading_jet_pt"].append(Tst["DER_P_T"].iloc[1])
-           EventDataSet["PRI_leading_jet_eta"].append(Tst['DER_Eta'].iloc[0])
-           EventDataSet["PRI_subleading_jet_eta"].append(Tst['DER_Eta'].iloc[1])
-        elif len(Tst) == 1:
-           EventDataSet["PRI_leading_jet_pt" ].append(Tst["DER_P_T"].iloc[0])
-           EventDataSet["PRI_subleading_jet_pt"].append(np.nan)
-           EventDataSet["PRI_leading_jet_eta"].append(Tst['DER_Eta'].iloc[0])
-           EventDataSet["PRI_subleading_jet_eta"].append(np.nan)
-        elif len(Tst) == 0:
-           EventDataSet["PRI_leading_jet_pt" ].append(np.nan)
-           EventDataSet["PRI_subleading_jet_pt"].append(np.nan)
-           EventDataSet["PRI_leading_jet_eta"].append(np.nan)
-           EventDataSet["PRI_subleading_jet_eta"].append(np.nan) 
-           
-           
-        EventDataSet["DER_sum_P_T"].append(sum(Temp.DER_P_T[Temp.IST ==  1]))
-        ### Determing the values associated to the leading and sub-leading leptons###
-        Tst = Temp[(Temp.IST == 1) & (abs(Temp.PDGID).isin(PDGID_Lepton_List))]
-        Tst = Tst.sort_values('DER_P_T', ascending = False)
-        EventDataSet["PRI_nleps"].append(len(Tst))
-
-        if len(Tst) >= 2:
-            ###Values for leading and sub-leading leptons######
-            EventDataSet["PRI_lep_leading_pt"].append(Tst['DER_P_T'].iloc[0])
-            EventDataSet["PRI_lep_subleading_pt"].append(Tst['DER_P_T'].iloc[1])
-            
-            EventDataSet["PRI_lep_leading_eta"].append(Tst['DER_Eta'].iloc[0])
-            EventDataSet["PRI_lep_subleading_eta"].append(Tst['DER_Eta'].iloc[1])
-            
-            EventDataSet["PRI_lep_leading_phi"].append(Tst['DER_Azmithul_Angle'].iloc[0])
-            EventDataSet["PRI_lep_subleading_phi"].append(Tst['DER_Azmithul_Angle'].iloc[1])
-            ###Comparisons between leading and sub-leading leptons#####
-            EventDataSet["DER_P_T_ratio_lep_pair"].append(Tst['DER_P_T'].iloc[0]/Tst['DER_P_T'].iloc[1])
-            EventDataSet["DER_Diff_Eta_lep_pair"].append(abs(Tst['DER_Eta'].iloc[0] - Tst['DER_Eta'].iloc[1]))
-            EventDataSet["DER_Diff_Phi_lep_pair"].append(abs(Tst['DER_Azmithul_Angle'].iloc[0] - Tst['DER_Azmithul_Angle'].iloc[1]))
-            
-            
-        elif len(Tst) == 1:
-            ###Values for leading and sub-leading leptons######
-            EventDataSet["PRI_lep_leading_pt"].append(Tst['DER_P_T'].iloc[0])
-            EventDataSet["PRI_lep_subleading_pt"].append(np.nan)
-            
-            EventDataSet["PRI_lep_leading_eta"].append(Tst['DER_Eta'].iloc[0])
-            EventDataSet["PRI_lep_subleading_eta"].append(np.nan)
-            
-            EventDataSet["PRI_lep_leading_phi"].append(Tst['DER_Azmithul_Angle'].iloc[0])
-            EventDataSet["PRI_lep_subleading_phi"].append(np.nan)
-            ###Comparisons between leading and sub-leading leptons#####
-            EventDataSet["DER_P_T_ratio_lep_pair"].append(np.nan)
-            EventDataSet["DER_Diff_Eta_lep_pair"].append(np.nan)
-            EventDataSet["DER_Diff_Phi_lep_pair"].append(np.nan)
-            
-            
-        elif len(Tst) == 0:
-            ###Values for leading and sub-leading leptons######
-            EventDataSet["PRI_lep_leading_pt"].append(np.nan)
-            EventDataSet["PRI_lep_subleading_pt"].append(np.nan)
-            
-            EventDataSet["PRI_lep_leading_eta"].append(np.nan)
-            EventDataSet["PRI_lep_subleading_eta"].append(np.nan)
-            
-            EventDataSet["PRI_lep_leading_phi"].append(np.nan)
-            EventDataSet["PRI_lep_subleading_phi"].append(np.nan)
-            ###Comparisons between leading and sub-leading leptons#####
-            EventDataSet["DER_P_T_ratio_lep_pair"].append(np.nan)
-            EventDataSet["DER_Diff_Eta_lep_pair"].append(np.nan)
-            EventDataSet["DER_Diff_Phi_lep_pair"].append(np.nan)
-
-        ###Missing Energy values#####
-        EventDataSet["PRI_Missing_pt"].append(sum(Temp.DER_P_T[(Temp.IST == 1) & (Temp.PDGID.isin(PDGID_Neutrino_List))]))
-        
-        if any(item in list(Temp.PDGID[Temp.IST == 1]) for item in ParticleIDofinterest):
-            EventDataSet['Label'].append(1)
-        else:
-             EventDataSet['Label'].append(0)
-       
+    n = cpu_count()
+    print('Combining events')
+    with Pool(n) as pool:
+        EventDataSet = pd.concat(tqdm(pool.imap(CombineEvents,  [group for _, group in DataSet.groupby(by='EventID')]),total=len(np.unique(DataSet.EventID))))
+    pool.close()
+    pool.join()
     
-    df = pd.DataFrame(EventDataSet)
     print("Sample of the data.")
-    print(df.head())
-    df.to_csv(SelectedDirectory + "\EventData.csv", index = False)    
-    
+    print(EventDataSet.head())
+    EventDataSet.to_csv(SelectedDirectory + "\EventData.csv", index = False)    
+
+def DetectMADSpinRun(Nparticles):
+    Results = [np.unique(Nparticles.array())[i][0] for i in range(len(np.unique(Nparticles.array())))]
+    Diff = [Results[i] - Results[i-1] for i in range(1,len(Results))]
+    if max(Diff) > 1:
+        return True
+    else:
+        return False
+
+def PseudoInformation(Event):
+    Cols = ['EventID','PDGID','IST','MOTH1','MOTH2','ICOL1','ICOL2','P1','P2','P3','P4','P5','VTIM','SPIN','WEIGHT','DER_P_T','DER_Eta','DER_Azmithul_Angle']
+    EventID = [Event[0] for i in range(len(Event[2]))]
+    EventWeight = [Event[1] for i in range(len(Event[2]))]
+    ##### This is badly implimented but it fixed the issue of speed. There should be a better way of doing this    
+    Data = list(zip(EventID, Event[2], Event[3], Event[4], Event[5], Event[6], Event[7], Event[8], Event[9], Event[10], Event[11], Event[12], Event[13], Event[14], EventWeight, Event[15], Event[16], Event[17]))
+    return pd.DataFrame(data = Data, columns=Cols)
+
+
 def ExtractFromROOT(SelectedFile, EventID):
     """
     Extracts information from a ROOT file and captures all relevant event data, including psuedorapidities.    
@@ -468,13 +497,14 @@ def ExtractFromROOT(SelectedFile, EventID):
         The dataset containing all information from the converted ROOT file.
 
     """
+    print('Opening ROOT file and extracting data.')
     ROOTFILE = uproot.open(SelectedFile)
-    LocEventID = EventID
     TREE = ROOTFILE['LHEF']
-    BRANCH = TREE['Event']
-    EventWeights = np.float(BRANCH['Event.Weight'].array()[0][0]) * Luminosity * 1000 ### WEIGHT
+    BRANCH1 = TREE['Event']
+    EventWeights = np.float(BRANCH1['Event.Weight'].array()[0][0]) * Luminosity * 1000 ### WEIGHT
+    MADSPIN = DetectMADSpinRun(BRANCH1['Event.Nparticles'])
     BRANCH = TREE['Particle']
-    WriteList = []
+   
     ID = BRANCH['Particle.PID'].array() ### PDGID
     IST = BRANCH['Particle.Status'].array() ### IST
     MOTH1 = BRANCH['Particle.Mother1'].array() ### MOTH1
@@ -490,16 +520,39 @@ def ExtractFromROOT(SelectedFile, EventID):
     SPIN = BRANCH['Particle.Spin'].array() ### SPIN 
     DER_P_T = BRANCH['Particle.PT'].array() ### DER_P_T
     DER_Eta = BRANCH['Particle.Eta'].array()### DER_Eta
-    DER_Azmithul_Angle =  BRANCH['Particle.Phi'].array() ### DER_Azmithul_Angle    
-    pbar = tqdm(total = len(BRANCH['Particle.fUniqueID'].array()) // 2, leave = None)
-    for i in range(len(BRANCH['Particle.fUniqueID'].array()) // 2, len(BRANCH['Particle.fUniqueID'].array()) ):
-         WriteList = WriteList + list(zip([LocEventID for k in range(len(ID[i]))], ID[i], IST[i], MOTH1[i], MOTH2[i], ICOL1[i], ICOL2[i], P1[i], P2[i], P3[i], P4[i], P5[i], VTIM[i], SPIN[i], [EventWeights for k in range(len(ID[i]))], DER_P_T[i], DER_Eta[i], DER_Azmithul_Angle[i]))
-         LocEventID = LocEventID + 1
-         pbar.update(n=1)
-            
-    pbar.leave = None
-    pbar.close()
-    DataSet = pd.DataFrame(WriteList, columns = ['EventID','PDGID','IST','MOTH1','MOTH2','ICOL1','ICOL2','P1','P2','P3','P4','P5','VTIM','SPIN','WEIGHT','DER_P_T','DER_Eta','DER_Azmithul_Angle'])
+    DER_Azmithul_Angle =  BRANCH['Particle.Phi'].array() ### DER_Azmithul_Angle
+    if MADSPIN:
+        StartingVal = len(BRANCH['Particle.fUniqueID'].array()) // 2
+        EndingVal = len(BRANCH['Particle.fUniqueID'].array())
+    else: 
+        StartingVal = 0
+        EndingVal = len(BRANCH['Particle.fUniqueID'].array())
+    
+    LocEventID = list(range(EventID, EventID + (EndingVal - StartingVal))) 
+    EventWeights = [np.float(BRANCH1['Event.Weight'].array()[0][0]) * Luminosity * 1000]*(EndingVal- StartingVal)### WEIGHT
+    print('Zipping Data Together')
+    ZippedData = list(zip(LocEventID, 
+                          EventWeights,
+                          ID[StartingVal:],
+                          IST[StartingVal:],   
+                          MOTH1[StartingVal:],
+                          MOTH2[StartingVal:],
+                          ICOL1[StartingVal:],
+                          ICOL2[StartingVal:],
+                          P1[StartingVal:],
+                          P2[StartingVal:],
+                          P3[StartingVal:],
+                          P4[StartingVal:],
+                          P5[StartingVal:],
+                          VTIM[StartingVal:],
+                          SPIN[StartingVal:],
+                          DER_P_T[StartingVal:],
+                          DER_Eta[StartingVal:],
+                          DER_Azmithul_Angle[StartingVal:]))
+    print('Converting to csv...')
+    with Pool(cpu_count()) as pool:
+             DataSet = pd.concat(tqdm(pool.imap(PseudoInformation,[Event for Event in ZippedData]),total=(EndingVal - StartingVal )))
+    
     return DataSet
 
 def ROOT2CSV(SelectedDirectory):
@@ -560,3 +613,15 @@ def RunAllconversions():
     return SelectedDirectory
         
 
+#######################
+#EventDataSet = pd.DataFrame()
+#EventDataSet['EventID'] = np.unique(DataSet.EventID)
+#GroupedData = DataSet.groupby('EventID')
+#EventDataSet['Weight'] = list(GroupedData.WEIGHT.max())
+
+
+
+######################
+
+if __name__ is '__main__':
+    RunAllconversions()

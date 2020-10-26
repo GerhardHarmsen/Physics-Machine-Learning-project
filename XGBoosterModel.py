@@ -4,7 +4,8 @@ Created on Wed Apr  1 12:26:58 2020
 
 @author: gerha
 """
-
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -18,7 +19,7 @@ from sklearn.utils import resample
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import itertools
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, f1_score
 from sklearn.metrics import plot_confusion_matrix
 import Feature_Plots_PCA
 
@@ -53,9 +54,47 @@ def ConfusionMatrixPlot(ConfusionResults, ListFeatures, ListCoeffs):
     plt.title("Model: XGBoost \n Features: {}".format(dict(zip(ListFeatures,ListCoeffs))))
     plt.plot(fig)
     plt.show()
+    
+def xgb_f1(y, t, threshold=0.5):
+    t = t.get_label()
+    y_bin = (y > threshold).astype(int) # works for both type(y) == <class 'numpy.ndarray'> and type(y) == <class 'pandas.core.series.Series'>
+    return 'f1',f1_score(t,y_bin)
 
+def LabelClean(DataSet):
+    try:
+        DataSet.drop(['EventID'],axis=1,inplace=True)
+    except:
+        pass
+    
+    try: 
+        DataSet.drop(['Label'],axis=1,inplace=True)
+    except:
+        pass
+    return DataSet
+
+def DataCuts(DataSet, DisplayRemoval = False):
+    """Function for introducing momentum and pseudorapidity cuts to the data """
+    ####Clean the jet signals. To remove any soft jets.###
+    DataSet0 = DataSet[DataSet.PRI_jets == 0]
+    DataSet1 = DataSet[(DataSet.PRI_jets == 1) & (DataSet.PRI_leading_jet_pt >= 25) & (abs(DataSet.PRI_leading_jet_eta) <= 2.5)]
+    DataSet2 = DataSet[(DataSet.PRI_jets >= 2) & (DataSet.PRI_leading_jet_pt >= 25) & (abs(DataSet.PRI_leading_jet_eta) <= 2.5) & (DataSet.PRI_subleading_jet_pt >= 25) & (abs(DataSet.PRI_subleading_jet_eta) <= 2.5)]
+    if DisplayRemoval:
+        print('{} events removed from the dataset as the jets had a momentum lower than 25GeV or the psuedorapidity values of the jets was greater than 2.5.'.format(len(DataSet)-len(pd.concat([DataSet0,DataSet1,DataSet2]))))
+    JetDataSet = pd.concat([DataSet0,DataSet1,DataSet2])
+    
+    ### Clean the leptonic signals to remove any soft leptons####
+    DataSet3 = JetDataSet[JetDataSet.PRI_nleps == 0]
+    DataSet4 = JetDataSet[(JetDataSet.PRI_nleps == 1) & (JetDataSet.PRI_lep_leading_pt >= 10) & (abs(JetDataSet.PRI_lep_leading_eta) <= 2.5)]
+    DataSet5 = JetDataSet[(JetDataSet.PRI_nleps >= 2) & (JetDataSet.PRI_lep_leading_pt >= 10) & (abs(JetDataSet.PRI_lep_leading_eta) <= 2.5) & (JetDataSet.PRI_lep_subleading_pt >= 10) & (abs(JetDataSet.PRI_lep_subleading_eta) <= 2.5)]
+    if DisplayRemoval:
+        print('{} events removed from the dataset as the leptons had a momentum less than 10GeV, or had a pseudorapidity of greater than 2.5. '.format(len(JetDataSet)-len(pd.concat([DataSet3,DataSet4,DataSet5]))))
+    CleanedDataSet = pd.concat([DataSet3,DataSet4,DataSet5])
+    
+    return CleanedDataSet
+    
 class TreeModel():
     def __init__(self,DataSet,paramList = None):
+        DataSet = DataCuts(DataSet)
         try:
             self.df = DataSet.drop(['EventID','Label'],axis=1)
             self.Y = DataSet.Label
@@ -68,6 +107,7 @@ class TreeModel():
             except:
                 print('DataSet not of the correct form. Ensure that the particle'
                   / 'dataset has been produced by the ConvertLHEToTxt module')
+                exit
         
         if paramList == None:
             self.HyperParameters = {}
@@ -75,7 +115,7 @@ class TreeModel():
             self.HyperParameters = paramList
             
         self.SubSampleData()
-            
+
     def SubSampleData(self):
         test_size = 0.3
         seed = 0
@@ -94,6 +134,8 @@ class TreeModel():
         #self.TestingData = pd.concat([X_test,y_test],axis = 1)
         self.TrainingData = pd.concat([X_train,y_train],axis =1)
         self.TestingData = pd.concat([X_test,y_test],axis=1)
+
+
 
     def HyperParameterTuning(self, NoofTests = 200):
         """
@@ -122,11 +164,20 @@ class TreeModel():
                        'min_split_loss' : [0, 0.5, 0.8, 1, 2],
                        'reg_gamma' : [0.1, 0.2, 0.3, 0.4, 0.5, 0.6 ],
                        'min_child_weight' : range(5,8)}
-    
+        #### We are goiing to keep some parameters constant during this test. If you wish to test all parameters delete the below paramgrid.
+        param_grid =  { 'learning_rate' : [0.01, 0.1, 0.5, 0.9],
+                       'n_estimators' : [200],
+                       'subsample': [1],
+                       'max_depth': list(range(4,11)),
+                       'base_score' : [0.1, 0.5, 0.9],
+                       'reg_alpha' : [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+                       'min_split_loss' : [0, 0.5, 0.8, 1, 2],
+                       'reg_gamma' : [0.4],
+                       'min_child_weight' : [5]}
         model = XGBClassifier(objective = "binary:logistic")
         randomized_mse = RandomizedSearchCV(estimator = model, 
                                             param_distributions=param_grid,
-                                            n_iter = NoofTests, scoring='precision', 
+                                            n_iter = NoofTests, scoring='f1', 
                                             n_jobs =-1, cv=4, verbose = 1)
         randomized_mse.fit(self.TrainingData.drop(['Events_weight','Label'],axis=1), self.TrainingData.Label)
         print('Best parameters found: ', randomized_mse.best_params_)
@@ -161,6 +212,8 @@ class TreeModel():
             print('Model does not work with a dataset, trying to use a DMatrix.')
             dtrain = xgb.DMatrix(X_test,Y_test)
             y_pred = self.Model.predict(dtrain)
+            
+            
         Predictions = [round(value) for value in y_pred]
         X_dev = X_test.copy()
         for i in range(X_dev.shape[0]):
@@ -174,10 +227,23 @@ class TreeModel():
                Predictions[i] = 'True positive'
     
         X_dev['Class'] = Predictions
+        
         try:
             Feature_Plots_PCA.FeaturePlots(X_dev, 'Class')
         except: 
-            Feature_Plots_PCA.FeaturePlots(X_dev.drop('PRI_jets',axis=1), 'Class')
+            print('Some of the features do not have sufficient variation attempting to clean the dataset...')
+            DropLabel = []
+            for column in tqdm(X_dev.drop('Class',axis=1).columns):
+                for Classes in X_dev['Class'].unique():
+                    
+                    if len(np.unique(X_dev[column][X_dev['Class'] == Classes ])) <= 2:
+                        DropLabel.append(column)
+                        print('For column {} of class {} contains the value {}.'.format(column,Classes,np.unique(X_dev[column][X_dev['Class'] == Classes ])))
+                        print('This will cause an error with seaborn pairplot and so the column shall be removed.')
+                        break
+            
+            
+            Feature_Plots_PCA.FeaturePlots(X_dev.drop(np.unique(DropLabel),axis=1), 'Class')
     
     def TreeDiagram(self):
         fig, ax = plt.subplots(figsize=(300, 300))
@@ -203,40 +269,48 @@ class TreeModel():
         sum_wneg = sum( self.TrainingData.Events_weight.iloc[i] for i in range(len(self.TrainingData)) if self.TrainingData.Label.iloc[i] == 0.0  )
         print ('Weight statistics: wpos=%g, wneg=%g, ratio=%g' % ( sum_wpos, sum_wneg, sum_wneg/sum_wpos ))
         paramList = self.HyperParameters
-        paramList['eval_metric'] = ['ams@0','error']
+        paramList['eval_metric'] = ['ams@0','auc']
         paramList['tree_method'] ='gpu_hist'
-        paramList['ojective'] = 'binary:logistic'
-        watchlist = [(dtest,'eval'), (dtrain,'train')]
+        paramList['objective'] = 'binary:logistic'
+        watchlist = [(dtrain,'train'), (dtest,'eval')]
         print ('loading data end, start to boost trees')
         AdjustWeights = [0,0.001,0.01,0.1,1]
-        AMSResults = []
+        Results = []
         for i in AdjustWeights:
+            print(i)
             paramList['scale_pos_weight'] = sum_wneg/sum_wpos * i
-            self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round,evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
-            AMSResults.append(self.Model.best_score)
-        paramList['scale_pos_weight'] = sum_wneg/sum_wpos * AdjustWeights[AMSResults.index(max(AMSResults))]
-        self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round,evals = watchlist, early_stopping_rounds= 50, verbose_eval= True)
-        self.ModelPredictions(self.TestingData.drop(['Label'],axis=1),self.TestingData.Label)
+            self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
+            Results.append(self.Model.best_score)
+        print('Weight Adjust complete')
+        paramList['scale_pos_weight'] = sum_wneg/sum_wpos * AdjustWeights[Results.index(max(Results))]
+        self.Model = xgb.train( params = paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1 ,evals = watchlist, early_stopping_rounds= 50, verbose_eval= True)
+        self.ModelPredictions(self.TestingData)
         self.Model.save_model('XGBoostModelFile')
         self.TreeDiagram()
         self.ConfusionPairPlot(self.TestingData.drop(['Events_weight','Label'],axis=1), self.TestingData.Label)
         return self.Model
     
-    def ModelPredictions(self,X_test,y_test):
-        Matrix = xgb.DMatrix(X_test.drop('Events_weight',axis=1),label=y_test,weight=X_test.Events_weight)
+    def ModelPredictions(self,DataSet):
+        DataSet1 = DataCuts(DataSet)
+        Y = DataSet1.Label
+        DataSet1 = LabelClean(DataSet1)
+        Matrix = xgb.DMatrix(DataSet1.drop('Events_weight',axis=1),label=Y,weight=DataSet.Events_weight)
         y_pred = self.Model.predict(Matrix)
         predictions = y_pred > 0.5
-        accuracy = accuracy_score(y_test, predictions)
+        accuracy = accuracy_score(Y, predictions)
         print("Accuracy: %.2f%%" % (accuracy * 100.0))
-        GXBoost_confusion = confusion_matrix(y_test,predictions,normalize=None)
-        print('{} events misclassified as true with an ams score of {}'.format(GXBoost_confusion[0,1], self.AMSScore(self.TrainingData.drop('Label',axis=1),self.TrainingData.Label)))
+        GXBoost_confusion = confusion_matrix(Y,predictions,normalize=None)
+        print('{} events misclassified as true with an ams score of {}'.format(GXBoost_confusion[0,1], self.AMSScore(DataSet)))
         sns.heatmap(GXBoost_confusion,annot=True)
         plt.xlabel('Predicted value')
         plt.ylabel('True value')
         plt.title("XGBoost")
         plt.show()
         
-    def AMSScore(self,DataSet,Y):
+    def AMSScore(self,DataSet):
+        DataSet = DataCuts(DataSet)
+        Y = DataSet.Label
+        DataSet = LabelClean(DataSet)
         dtrain = xgb.DMatrix(DataSet.drop('Events_weight',axis=1),Y)
         y_pred = self.Model.predict(dtrain)
         Predictions = [round(value) for value in y_pred]
@@ -251,11 +325,11 @@ class TreeModel():
         print('Number of correctly classified signal events {}. Number of misclassified background events {}'.format(len(s),len(b)))
         s = sum(s)
         b = sum(b)
-        print('The AMS score is {}'.format(np.sqrt(2*(s + b)*np.log(1 + s/b)-s)))
+        print('The AMS score is {}'.format(s/np.sqrt(b)))
+        return s/np.sqrt(b)
         
-        
-        
-
+# OLD AMS SCORE       
+# np.sqrt(2*(s + b)*np.log(1 + s/b)-s)
 def XGBoostersFeatureComparison(DataSet, Y):
     # split data into train and test sets
     seed = 7

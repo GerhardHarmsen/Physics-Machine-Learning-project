@@ -45,7 +45,7 @@ def text_plotter(x_data, y_data, text_positions, labels, axis,txt_width,txt_heig
         axis.text(x - .03, 1.02*t, labels[i],rotation=0, color='black', fontsize=FontSize)
         i = i + 1
         if y != t:
-            axis.arrow(x, t,0,y-t, color='black',alpha=0.2, width=txt_width*0.1,
+            axis.arrow(x, t,0,y-t, color='black',alpha=0.2, width=0.014,
                        head_width=.02, head_length=txt_height*0.5,
                        zorder=0,length_includes_head=True)
 
@@ -70,6 +70,56 @@ def FeaturePlots(DataSet, LabelOfInterest):
     plt.title('Heat map of the features showing linear correlation of the features')
     plt.show()
 
+def PCAPlots(DataSet,LabelOfInterest,NoofJets,NoofLepton,ax=None,ax1=None, plt_kwargs = {}, sct_kwargs = {}):
+    DataSet2 = DataSet.drop(labels = LabelOfInterest, axis = 1)
+    DataSet2.dropna(axis=1,inplace=True)
+    scalar = StandardScaler()
+    scalar.fit(DataSet2)
+    scaled_data =scalar.transform(DataSet2)
+    #### Scree plots
+    #pca = PCA(n_components= len(DataSet2.columns))
+    #pca.fit_transform(DataSet2)
+    #plt.plot(range(1,len(pca.explained_variance_ratio_)+1),pca.explained_variance_ratio_)
+    #plt.title('Scree plot', fontsize = TitleSize)
+    #plt.xlabel('Number of PCA components', fontsize = FontSize)
+    #plt.ylabel('Eigenvalue', fontsize = FontSize)
+    #plt.show()
+    ####
+    #PCA_Num = click.prompt('From the screen plot how many PCA components would you like to use?', default = 2, type=int)
+    pca = PCA(n_components = 2)
+
+    pca.fit(scaled_data)
+    x_pca = pca.transform(scaled_data)
+    if ax is None:
+        ax = plt.gca()
+    
+    for g in np.unique(DataSet[LabelOfInterest]):
+        i = np.where(DataSet[LabelOfInterest] == g)
+        if g == 0:
+            Lbl = 'Background'
+            Color = 'Blue'
+        else:
+            Lbl = 'Signal'
+            Color = 'Orange'
+        ax.scatter(x_pca[i,0], x_pca[i,1], label = Lbl, c = Color )
+    #ax.set_title('Principal Component plot of the data for {} jets and {} leptons'.format(NoofJets,NoofLepton))    
+    updatedColumns = list(DataSet2.columns)
+    df_comp= pd.DataFrame(pca.components_,columns = updatedColumns)
+    if ax1 is None:
+        ax1 = plt.gca()
+    ax1.set_xlim([-1,1])
+    ax1.set_ylim([-1,1])
+    ax1.set_xlabel('')
+    ax1.scatter(pca.components_[0,:],pca.components_[1,:])
+    Circ = plt.Circle([0,0], radius = 1, fill = None)
+    ax1.add_patch(Circ)
+    ax1.grid()
+    txt_height = 0.04*(plt.ylim()[1] - plt.ylim()[0])
+    txt_width = 0.2*(plt.xlim()[1]- plt.xlim()[0])
+    text_positions = get_text_positions(pca.components_[0,:],pca.components_[1,:],txt_width,txt_height)
+    text_plotter(pca.components_[0,:], pca.components_[1,:], text_positions,updatedColumns , ax1 , txt_width,txt_height)
+    return ax, ax1
+
 def PCAAnalysis(DataSet, LabelOfInterest):
     DataSet2 = DataSet.drop(labels = LabelOfInterest, axis = 1)
     for col in np.unique(DataSet2.columns):
@@ -77,47 +127,34 @@ def PCAAnalysis(DataSet, LabelOfInterest):
         boxplot1 = DataSet.boxplot(by = LabelOfInterest, column = col)
         plt.show()
     
-    scalar = StandardScaler()
-    scalar.fit(DataSet2)
-    scaled_data =scalar.transform(DataSet2)
-    #### Scree plots
-    pca = PCA(n_components= 6)
-    pca.fit_transform(DataSet2)
-    plt.plot(range(1,len(pca.explained_variance_ratio_)+1),pca.explained_variance_ratio_)
-    plt.title('Scree plot', fontsize = TitleSize)
-    plt.xlabel('Number of PCA components', fontsize = FontSize)
-    plt.ylabel('Eigenvalue', fontsize = FontSize)
-    plt.show()
-    ####
-    PCA_Num = click.prompt('From the screen plot how many PCA components would you like to use?', default = 2, type=int)
-    pca = PCA(n_components = PCA_Num)
-    pca.fit(scaled_data)
-    x_pca = pca.transform(scaled_data)
-    plt.figure(num =None, figsize = [20, 20])   
-    for g in np.unique(DataSet[LabelOfInterest]):
-        i = np.where(DataSet[LabelOfInterest] == g)
-        plt.scatter(x_pca[i,0], x_pca[i,1], label = g )
-    plt.title('Principal Component plot of the data', fontsize = TitleSize)
-    plt.legend()
-    plt.xlabel('First Principal Component', fontsize = FontSize)
-    plt.ylabel('Second Principal Component', fontsize = FontSize)
-    plt.show()      
-    updatedColumns = list(DataSet2.columns)
-    df_comp= pd.DataFrame(pca.components_,columns = updatedColumns)
-    fig, ax = plt.subplots(figsize = (20, 20))
-    ax.set_xlim([-1,1])
-    ax.set_ylim([-1,1])
-    ax.set_xlabel('')
-    ax.scatter(pca.components_[0,:],pca.components_[1,:])
-    Circ = plt.Circle([0,0], radius = 1, fill = None)
-    ax.add_patch(Circ)
-    plt.title('Weighting of the features in the dataset for the first and second prinipal componets', fontsize = TitleSize)
-    plt.xlabel('First Principal Component', fontsize = FontSize)
-    plt.ylabel('Second Principal Component', fontsize = FontSize)
-    ax.grid()
-    txt_height = 0.04*(plt.ylim()[1] - plt.ylim()[0])
-    txt_width = 0.04*(plt.xlim()[1]- plt.xlim()[0])
-    text_positions = get_text_positions(pca.components_[0,:],pca.components_[1,:],txt_width,txt_height)
-    text_plotter(pca.components_[0,:], pca.components_[1,:], text_positions,updatedColumns , ax , txt_width,txt_height)
-    plt.show()
     
+    fig, axes = plt.subplots(nrows = 3, ncols = 3, figsize=(40, 40))
+    fig1, axes1 = plt.subplots(nrows = 3, ncols = 3, figsize=(40, 40))
+    
+    for Jets in [0,1,2]:
+        for Leptons in [0,1,2]:
+            if Jets == 2:
+                PCADataSet = DataSet[DataSet.PRI_jets >= 2]
+            else:
+                PCADataSet = DataSet[DataSet.PRI_jets == Jets]
+            
+            if Leptons == 2:
+                PCADataSet = PCADataSet[PCADataSet.PRI_nleps >= 2] 
+            else:
+                PCADataSet = PCADataSet[PCADataSet.PRI_nleps == Leptons] 
+            
+            try:
+                PCAPlots(PCADataSet,LabelOfInterest,Jets,Leptons, ax=axes[Jets,Leptons],ax1=axes1[Jets,Leptons])      
+            except:
+                pass
+            
+            axes[Jets,Leptons].legend()
+            axes[2,Leptons].set_xlabel('Number of leptons: {}'.format(Leptons),FontSize = 25)
+            axes[Jets,0].set_ylabel('Number of Jets: {}'.format(Jets), FontSize = 25)
+            axes1[2,Leptons].set_xlabel('Number of leptons: {}'.format(Leptons),FontSize = 25)
+            axes1[Jets,0].set_ylabel('Number of Jets: {}'.format(Jets), FontSize = 25)
+            
+    
+    plt.tight_layout() #This to avoid overlap of labels and titles across plots
+    plt.show()
+        
