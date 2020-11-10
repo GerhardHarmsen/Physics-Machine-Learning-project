@@ -19,6 +19,7 @@ import click
 
 TitleSize = 20
 FontSize  = 15
+plt.rc('legend',fontsize=20)
 
 def get_text_positions(x_data, y_data, txt_width, txt_height):
     a = list(zip(y_data, x_data))
@@ -92,17 +93,20 @@ def PCAPlots(DataSet,LabelOfInterest,NoofJets,NoofLepton,ax=None,ax1=None, plt_k
     x_pca = pca.transform(scaled_data)
     if ax is None:
         ax = plt.gca()
-    
+   
+    ColourCodes = { 0 : {'Lbl' : 'Background', 'Color' : 'Blue'},
+                    1 : {'Lbl' : 'Signal',  'Color' : 'Orange'},
+                    'True Negative' : {'Lbl' : 'True Negative', 'Color' : 'Blue'},
+                    'False Negative' : {'Lbl' : 'False Negative', 'Color' : 'Orange'},
+                    'False positive' : {'Lbl' : 'False positive', 'Color' : 'Green'},
+                    'True positive' : {'Lbl' : 'True positive', 'Color' : 'Red'}     
+                    }
     for g in np.unique(DataSet[LabelOfInterest]):
         i = np.where(DataSet[LabelOfInterest] == g)
-        if g == 0:
-            Lbl = 'Background'
-            Color = 'Blue'
-        else:
-            Lbl = 'Signal'
-            Color = 'Orange'
-        ax.scatter(x_pca[i,0], x_pca[i,1], label = Lbl, c = Color )
+        PercentageOfCase = (len(DataSet[DataSet[LabelOfInterest] == g]) / len(DataSet)) * 100
+        ax.scatter(x_pca[i,0], x_pca[i,1], label = ColourCodes[g]['Lbl'] + ' | ' + str(np.round(PercentageOfCase)) + '%', c = ColourCodes[g]['Color'])
     #ax.set_title('Principal Component plot of the data for {} jets and {} leptons'.format(NoofJets,NoofLepton))    
+    
     updatedColumns = list(DataSet2.columns)
     df_comp= pd.DataFrame(pca.components_,columns = updatedColumns)
     if ax1 is None:
@@ -120,12 +124,13 @@ def PCAPlots(DataSet,LabelOfInterest,NoofJets,NoofLepton,ax=None,ax1=None, plt_k
     text_plotter(pca.components_[0,:], pca.components_[1,:], text_positions,updatedColumns , ax1 , txt_width,txt_height)
     return ax, ax1
 
-def PCAAnalysis(DataSet, LabelOfInterest):
-    DataSet2 = DataSet.drop(labels = LabelOfInterest, axis = 1)
-    for col in np.unique(DataSet2.columns):
-        plt.figure(num =None, figsize = [20, 20])
-        boxplot1 = DataSet.boxplot(by = LabelOfInterest, column = col)
-        plt.show()
+def PCAAnalysis(DataSet, LabelOfInterest,BoxPlot = False):
+    if BoxPlot:
+        DataSet2 = DataSet.drop(labels = LabelOfInterest, axis = 1)
+        for col in np.unique(DataSet2.columns):
+            plt.figure(num =None, figsize = [20, 20])
+            boxplot1 = DataSet.boxplot(by = LabelOfInterest, column = col)
+            plt.show()
     
     
     fig, axes = plt.subplots(nrows = 3, ncols = 3, figsize=(40, 40))
