@@ -93,7 +93,7 @@ def DataCuts(DataSet, DisplayRemoval = False):
     return CleanedDataSet
     
 class TreeModel():
-    def __init__(self,DataSet,paramList = None):
+    def __init__(self,DataSet,paramList = None,SubSampleDataSet = False):
         DataSet = DataCuts(DataSet)
         try:
             self.df = DataSet.drop(['EventID','Label'],axis=1)
@@ -114,25 +114,32 @@ class TreeModel():
         else:
             self.HyperParameters = paramList
             
-        self.SubSampleData()
+        self.SubSampleData(SubSampleDataSet)
 
-    def SubSampleData(self):
+    def SubSampleData(self, SubSampleDataSet):
         test_size = 0.3
         seed = 0
         X_train, X_test, y_train, y_test = train_test_split(self.df, self.Y,
                                                             test_size=test_size, 
                                                             random_state=seed)
-        #X = pd.concat([X_train,y_train],axis=1)
-        #BackGround = X[X.Label == 0]
-        #Signal = X[X.Label == 1]
-        #UpSampledData = resample( Signal,
-        #                          replace = True,
-        #                          n_samples =len(BackGround),
-        #                          random_state = seed)
-        #
-        #self.TrainingData = pd.concat([BackGround,UpSampledData])
-        #self.TestingData = pd.concat([X_test,y_test],axis = 1)
-        self.TrainingData = pd.concat([X_train,y_train],axis =1)
+        if SubSampleDataSet: 
+            # concatenate our training data back together
+            df = pd.concat([X_train, y_train], axis=1)
+        
+            df_majority = df[df.Label==0]
+            df_minority = df[df.Label==1]
+            
+            # Downsample majority class
+            df_majority_downsampled = resample(df_majority, 
+                                               replace=False,    # sample without replacement
+                                               n_samples=len(df_minority),  # to match minority class
+                                               random_state = seed) # reproducible results
+        
+            # Combine minority class with downsampled majority class
+            self.TrainingData = pd.concat([df_majority_downsampled, df_minority])
+        else:
+            self.TrainingData = pd.concat([X_train,y_train],axis =1)
+            
         self.TestingData = pd.concat([X_test,y_test],axis=1)
 
 
@@ -242,9 +249,13 @@ class TreeModel():
                         print('This will cause an error with seaborn pairplot and so the column shall be removed.')
                         break
             
+            try:
+                Feature_Plots_PCA.FeaturePlots(X_dev.drop(np.unique(DropLabel),axis=1), 'Class')
+            except:
+                print('Unable to create pairplot to compare the results of the prediction.')
+        
+        Feature_Plots_PCA.PCAAnalysis(X_dev,'Class')
             
-            Feature_Plots_PCA.FeaturePlots(X_dev.drop(np.unique(DropLabel),axis=1), 'Class')
-    
     def TreeDiagram(self):
         fig, ax = plt.subplots(figsize=(300, 300))
         plot_tree(self.Model, num_trees=0, ax=ax, rankdir = 'LR')
@@ -280,10 +291,12 @@ class TreeModel():
             print(i)
             paramList['scale_pos_weight'] = sum_wneg/sum_wpos * i
             self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
+            #self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
             Results.append(self.Model.best_score)
         print('Weight Adjust complete')
         paramList['scale_pos_weight'] = sum_wneg/sum_wpos * AdjustWeights[Results.index(max(Results))]
         self.Model = xgb.train( params = paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1 ,evals = watchlist, early_stopping_rounds= 50, verbose_eval= True)
+        #self.Model = xgb.train( params = paramList, dtrain = dtrain,num_boost_round=num_round,evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
         self.ModelPredictions(self.TestingData)
         self.Model.save_model('XGBoostModelFile')
         self.TreeDiagram()
