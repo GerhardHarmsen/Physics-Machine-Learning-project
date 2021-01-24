@@ -9,10 +9,7 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import pandas as pd
 import numpy as np
 import seaborn as sns
-from numpy import loadtxt
 import xgboost as xgb
-from xgboost import plot_tree
-from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.metrics import accuracy_score
 from sklearn.utils import resample
@@ -21,7 +18,9 @@ from tqdm import tqdm
 import itertools
 from sklearn.metrics import confusion_matrix, f1_score
 from sklearn.metrics import plot_confusion_matrix
+from scipy.stats import uniform
 import Feature_Plots_PCA
+import shap
 
 
 def DictionaryPlot(DictList, ChartName):
@@ -72,6 +71,18 @@ def LabelClean(DataSet):
         pass
     return DataSet
 
+def RemoveFeaturesNotinPaper(DataSet):
+    RemoveColumns = ['PRI_leading_jet_pt',
+      'PRI_subleading_jet_pt', 'PRI_leading_jet_eta',
+      'PRI_subleading_jet_eta', 'PRI_lep_leading_pt', 'PRI_lep_subleading_pt',
+      'PRI_lep_leading_eta', 'PRI_lep_subleading_eta', 'PRI_lep_leading_phi',
+      'PRI_lep_subleading_phi', 'DER_P_T_ratio_lep_pair',
+      'DER_Diff_Eta_lep_pair', 'DER_Diff_Phi_lep_pair', 'DER_sum_P_T',
+      'PRI_Missing_pt']
+    return DataSet.drop(RemoveColumns,axis=1)
+    
+
+
 def DataCuts(DataSet, DisplayRemoval = False):
     """Function for introducing momentum and pseudorapidity cuts to the data """
     ####Clean the jet signals. To remove any soft jets.###
@@ -90,11 +101,20 @@ def DataCuts(DataSet, DisplayRemoval = False):
         print('{} events removed from the dataset as the leptons had a momentum less than 10GeV, or had a pseudorapidity of greater than 2.5. '.format(len(JetDataSet)-len(pd.concat([DataSet3,DataSet4,DataSet5]))))
     CleanedDataSet = pd.concat([DataSet3,DataSet4,DataSet5])
     
+    #######
+    ####### Consider implementing this in a better way #######################
+    #######
+    # CleanedDataSet = RemoveFeaturesNotinPaper(CleanedDataSet)
+    ######
+    ###### This function might have to be removed ############################
+    ######
     return CleanedDataSet
     
 class TreeModel():
-    def __init__(self,DataSet,paramList = None,SubSampleDataSet = False):
-        DataSet = DataCuts(DataSet)
+    def __init__(self,DataSet,paramList = None, ApplyDataCut = True, SubSampleDataSet = False):
+        if ApplyDataCut:
+            DataSet = DataCuts(DataSet)
+        #DataSet = RemoveFeaturesNotinPaper(DataSet)
         try:
             self.df = DataSet.drop(['EventID','Label'],axis=1)
             self.Y = DataSet.Label
@@ -112,14 +132,20 @@ class TreeModel():
         if paramList == None:
             self.HyperParameters = {}
         else:
+            if 'base_score' in paramList:
+                if click.confirm('"base_score" does not work with the SHAP package, for SHAP version 0.37 and XGBoost version 1.3.0. Will do you wish to remove the feature? Doing so will allow SHAP to run otherwise it will not be run.'):
+                   paramList.pop('base_score') 
+
             self.HyperParameters = paramList
             
+            
         self.SubSampleData(SubSampleDataSet)
+        
 
     def SubSampleData(self, SubSampleDataSet):
         test_size = 0.3
         seed = 0
-        X_train, X_test, y_train, y_test = train_test_split(self.df, self.Y,
+        X_train, X_test, y_train, y_test = train_test_split(self.df, self.Y, 
                                                             test_size=test_size, 
                                                             random_state=seed)
         if SubSampleDataSet: 
@@ -140,8 +166,10 @@ class TreeModel():
         else:
             self.TrainingData = pd.concat([X_train,y_train],axis =1)
             
+        
         self.TestingData = pd.concat([X_test,y_test],axis=1)
-
+        
+        
 
 
     def HyperParameterTuning(self, NoofTests = 200):
@@ -162,22 +190,27 @@ class TreeModel():
             
             
         """
+                
+        DataSet = self.TrainingData.sample(n=100000)
+        Labels = DataSet.Label
+        
+        #SHAP does not for some reason work with the base score feature.
         param_grid =  { 'learning_rate' : [0.01, 0.1, 0.5, 0.9],
                        'n_estimators' : [10, 50, 100, 150, 200],
                        'subsample': [0.3, 0.5, 0.9],
                        'max_depth': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                       'base_score' : [0.1, 0.5, 0.9],
+                       #'base_score' : [0.1, 0.5, 0.9],
                        'reg_alpha' : [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
                        'min_split_loss' : [0, 0.5, 0.8, 1, 2],
                        'reg_gamma' : [0.1, 0.2, 0.3, 0.4, 0.5, 0.6 ],
                        'min_child_weight' : range(5,8)}
         #### We are goiing to keep some parameters constant during this test. If you wish to test all parameters delete the below paramgrid.
-        param_grid =  { 'learning_rate' : [0.01, 0.1, 0.5, 0.9],
+        param_grid =  { 'learning_rate' : uniform(loc=0.01, scale=1), ###Uniform creates a distribution of [loc, loc + scale]
                        'n_estimators' : [200],
                        'subsample': [1],
                        'max_depth': list(range(4,11)),
-                       'base_score' : [0.1, 0.5, 0.9],
-                       'reg_alpha' : [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+                       #'base_score' : [0.1, 0.5, 0.9],
+                       'reg_alpha' : uniform(0,0.6),
                        'min_split_loss' : [0, 0.5, 0.8, 1, 2],
                        'reg_gamma' : [0.4],
                        'min_child_weight' : [5]}
@@ -186,7 +219,7 @@ class TreeModel():
                                             param_distributions=param_grid,
                                             n_iter = NoofTests, scoring='f1', 
                                             n_jobs =-1, cv=4, verbose = 1)
-        randomized_mse.fit(self.TrainingData.drop(['Events_weight','Label'],axis=1), self.TrainingData.Label)
+        randomized_mse.fit(DataSet.drop(['Events_weight','Label'],axis=1), Labels)
         print('Best parameters found: ', randomized_mse.best_params_)
         print('Best accuracy found: ', np.sqrt(np.abs(randomized_mse.best_score_)))
         self.HyperParameterResults = randomized_mse
@@ -254,19 +287,34 @@ class TreeModel():
             except:
                 print('Unable to create pairplot to compare the results of the prediction.')
         
-        Feature_Plots_PCA.PCAAnalysis(X_dev,'Class')
+        PCAPlots = Feature_Plots_PCA.PCAPlotter(X_dev,'Class')
+        PCAPlots.PCAAnalysis()
             
     def TreeDiagram(self):
-        fig, ax = plt.subplots(figsize=(300, 300))
-        plot_tree(self.Model, num_trees=0, ax=ax, rankdir = 'LR')
-        plt.show()
+        #fig, ax = plt.subplots(figsize=(300, 300))
+        #plot_tree(self.Model, num_trees=0, ax=ax, rankdir = 'LR')
+        #plt.show()
         for item in ['weight', 'gain', 'cover']:
             xgb.plot_importance(self.Model,
                                 importance_type = item, 
                                 title = 'Feature importance: {}'.format(item))
             plt.show()
     
-    def XGBoostTrain(self):
+    def XGBoostTrain(self, eval_metric = ['auc']):
+        """
+        
+
+        Parameters
+        ----------
+        eval_metric : string, optional
+            DESCRIPTION. The default is 'auc'. For the f1 metric type 'f1'. You can add a list of evaluate metrics by listing them, note that the last one will be used as a training metric.
+
+        Returns
+        -------
+        TYPE
+            The trained model and is stored inthe 
+
+        """
         # split data into train and test sets
         num_round = 200
         dtrain = xgb.DMatrix(self.TrainingData.drop(['Events_weight','Label'],axis =1),
@@ -280,31 +328,45 @@ class TreeModel():
         sum_wneg = sum( self.TrainingData.Events_weight.iloc[i] for i in range(len(self.TrainingData)) if self.TrainingData.Label.iloc[i] == 0.0  )
         print ('Weight statistics: wpos=%g, wneg=%g, ratio=%g' % ( sum_wpos, sum_wneg, sum_wneg/sum_wpos ))
         paramList = self.HyperParameters
-        paramList['eval_metric'] = ['ams@0','auc']
-        paramList['tree_method'] ='gpu_hist'
+        if 'f1' in eval_metric:
+            UseF1 = True
+            paramList['eval_metric'] = eval_metric.remove('f1')
+            paramList['eval_metric'] = ['error']
+            print('The f1 metric will be used to train the model.')
+        else:
+          paramList['eval_metric'] = eval_metric
+          UseF1 = False
+        
+        paramList['tree_method'] ='hist'
         paramList['objective'] = 'binary:logistic'
         watchlist = [(dtrain,'train'), (dtest,'eval')]
         print ('loading data end, start to boost trees')
         AdjustWeights = [0,0.001,0.01,0.1,1]
         Results = []
         for i in AdjustWeights:
-            print(i)
             paramList['scale_pos_weight'] = sum_wneg/sum_wpos * i
-            self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
-            #self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
+            if UseF1:
+                self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
+            else:
+                self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
             Results.append(self.Model.best_score)
         print('Weight Adjust complete')
+        print('Adjusting the weight by {}'.format(AdjustWeights[Results.index(max(Results))]))
         paramList['scale_pos_weight'] = sum_wneg/sum_wpos * AdjustWeights[Results.index(max(Results))]
-        self.Model = xgb.train( params = paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1 ,evals = watchlist, early_stopping_rounds= 50, verbose_eval= True)
-        #self.Model = xgb.train( params = paramList, dtrain = dtrain,num_boost_round=num_round,evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
+        if UseF1:
+            self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= True)
+        else:
+            self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, evals = watchlist, early_stopping_rounds= 50, verbose_eval= True)
+             
+        
         self.ModelPredictions(self.TestingData)
         self.Model.save_model('XGBoostModelFile')
         self.TreeDiagram()
-        self.ConfusionPairPlot(self.TestingData.drop(['Events_weight','Label'],axis=1), self.TestingData.Label)
+        #self.ConfusionPairPlot(self.TestingData.drop(['Events_weight','Label'],axis=1), self.TestingData.Label)
         return self.Model
     
     def ModelPredictions(self,DataSet):
-        DataSet1 = DataCuts(DataSet)
+        DataSet1 = DataSet.copy()
         Y = DataSet1.Label
         DataSet1 = LabelClean(DataSet1)
         Matrix = xgb.DMatrix(DataSet1.drop('Events_weight',axis=1),label=Y,weight=DataSet.Events_weight)
@@ -314,6 +376,7 @@ class TreeModel():
         print("Accuracy: %.2f%%" % (accuracy * 100.0))
         GXBoost_confusion = confusion_matrix(Y,predictions,normalize=None)
         print('{} events misclassified as true with an ams score of {}'.format(GXBoost_confusion[0,1], self.AMSScore(DataSet)))
+        
         sns.heatmap(GXBoost_confusion,annot=True)
         plt.xlabel('Predicted value')
         plt.ylabel('True value')
@@ -321,10 +384,10 @@ class TreeModel():
         plt.show()
         
     def AMSScore(self,DataSet):
-        DataSet = DataCuts(DataSet)
-        Y = DataSet.Label
-        DataSet = LabelClean(DataSet)
-        dtrain = xgb.DMatrix(DataSet.drop('Events_weight',axis=1),Y)
+        DataSet1 = DataSet.copy()
+        Y = DataSet1.Label
+        DataSet1 = LabelClean(DataSet1)
+        dtrain = xgb.DMatrix(DataSet.drop(['Events_weight','Label'],axis=1),Y)
         y_pred = self.Model.predict(dtrain)
         Predictions = [round(value) for value in y_pred]
         s = []
@@ -340,6 +403,32 @@ class TreeModel():
         b = sum(b)
         print('The AMS score is {}'.format(s/np.sqrt(b)))
         return s/np.sqrt(b)
+    
+    def SHAPValuePlots(self):
+        
+        if 'base_score' not in self.HyperParameters:
+            explainer = shap.TreeExplainer(self.Model)
+            
+            try: 
+                DataSet = self.df.drop('Events_weight',axis=1)
+            except:
+                DataSet = self.df
+        
+            shap_values = explainer.shap_values(DataSet)
+            shap.force_plot(explainer.expected_value, shap_values[0,:], DataSet.columns,matplotlib=True)
+            shap.summary_plot(shap_values, DataSet.columns, plot_type="bar")
+            
+            xmax = shap_values.mean() + 3*shap_values.std()
+            xmin = shap_values.mean() - 3*shap_values.std()
+                
+            List = list(np.unique(np.where(shap_values <= xmin)[0]))
+            List = List + list(np.unique(np.where(shap_values >= xmax)[0]))
+            
+            DataSet = DataSet.drop(DataSet.index[List])
+            shap_values = np.delete(shap_values,List,0)
+            
+            shap_values = explainer.shap_values(DataSet)
+            shap.summary_plot(shap_values, DataSet)
         
 # OLD AMS SCORE       
 # np.sqrt(2*(s + b)*np.log(1 + s/b)-s)

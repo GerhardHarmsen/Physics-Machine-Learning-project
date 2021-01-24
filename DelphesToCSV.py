@@ -10,11 +10,12 @@ import os
 import sys
 import pandas as pd
 from tqdm import tqdm
-from tkinter import filedialog as fd
 import multiprocessing as mp
 import uproot
 import click
 from multiprocessing import Pool, cpu_count
+
+np.seterr(divide='ignore', invalid='ignore')
 
 NoofCPU = cpu_count()
 Luminosity = 147
@@ -53,8 +54,14 @@ def RemoveColinearProcesses(ElectronDataSet, JetDataSet):
     ElectronDataSet = CleanElectrons(ElectronDataSet, JetDataSet)
     return JetDataSet, ElectronDataSet
 
+def DivisionTest(Numerator, Denominator):
+    try:
+        return Numerator/Denominator
+    except:
+        return np.nan
+
 def CombineEvents(EventData):
-    EventID, event_weight, Muon_pt, Muon_eta, Muon_phi, Muon_d0, Muon_dz, Electron_pt, Electron_eta, Electron_phi, Electron_d0, Electron_dz, MET, MET_eta, MET_phi, Tau_Tag, B_Tag, Jet_PT, Jet_Eta, Jet_phi, label_sig = EventData
+    EventID, event_weight, Muon_pt, Muon_eta, Muon_phi, Muon_d0, Muon_dz, Electron_pt, Electron_eta, Electron_phi, Electron_d0, Electron_dz, MET, MET_eta, MET_phi, Tau_Tag, B_Tag, Jet_PT, Jet_Eta, Jet_phi, HTScalar, label_sig = EventData
     if (len(Electron_pt) > 0 ) & (len(Jet_PT) > 0): 
         ElectronSet = list(zip(Electron_pt, Electron_eta, Electron_phi, Electron_d0, Electron_dz))
         JetSet = list(zip(Tau_Tag, B_Tag, Jet_PT, Jet_Eta, Jet_phi))
@@ -66,10 +73,9 @@ def CombineEvents(EventData):
         JetSet = list(zip(Tau_Tag, B_Tag, Jet_PT, Jet_Eta, Jet_phi))
         MuonSet = list(zip(Muon_pt, Muon_eta, Muon_phi, Muon_d0, Muon_dz))
         LeptonSet = ElectronSet + MuonSet
-        
+    
     JetSet.sort(key= lambda x: x[2],reverse=True)
     LeptonSet.sort(key= lambda x: x[0],reverse=True)
-    
     EventDataSet = {"EventID" : [],
                     "PRI_nleps" : [],
                     "PRI_jets" : [],
@@ -88,11 +94,19 @@ def CombineEvents(EventData):
                     "DER_Diff_Phi_lep_pair" : [],
                     "DER_sum_P_T": [],
                     "PRI_Missing_pt" : [],
+                    'HT' : [],
+                    'ST' : [],
+                    "DER_PT_leading_lepton_ratio_PT_leading_jet": [],
+                    "DER_PT_leading_lept_ratio_HT" : [],
+                    "DER_ST_ratio_PT_Leading_jet" : [],
+                    "DER_ST_ratio_HT" : [],
+                    "DER_PT_subleading_lepton_ratio_PT_leading_jet" : [],
+                    "DER_PT_subleading_lepton_ratio_HT" : [],
                     "Events_weight" : [],
                     "Label" : []}
     
     EventDataSet["EventID"].append(EventID)
-    EventDataSet["Events_weight"].append(event_weight[0])
+    EventDataSet["Events_weight"].append(event_weight)
     EventDataSet["PRI_jets"].append(len(JetSet))
     if len(JetSet) >= 2:
        EventDataSet["PRI_leading_jet_pt" ].append(JetSet[0][2])
@@ -165,10 +179,33 @@ def CombineEvents(EventData):
     
     EventDataSet['Label'].append(label_sig)
     
-       
+    #### Added features from paper 1901.XXX
+        
+    ST = EventDataSet["PRI_lep_leading_pt"][0] + EventDataSet["PRI_lep_subleading_pt"][0]
+    EventDataSet['HT'].append(HTScalar[0])
+    EventDataSet['ST'].append(ST)
+    EventDataSet["DER_PT_leading_lepton_ratio_PT_leading_jet"].append(DivisionTest(EventDataSet["PRI_lep_leading_pt"][0],EventDataSet["PRI_leading_jet_pt" ][0]))
+    EventDataSet["DER_PT_leading_lept_ratio_HT"].append(DivisionTest(EventDataSet["PRI_lep_leading_pt"][0],HTScalar[0]))
+    EventDataSet["DER_ST_ratio_PT_Leading_jet"].append(DivisionTest(ST,EventDataSet["PRI_leading_jet_pt" ][0])) 
+    EventDataSet["DER_ST_ratio_HT"].append(DivisionTest(ST,HTScalar[0]))
+    EventDataSet["DER_PT_subleading_lepton_ratio_PT_leading_jet"].append(DivisionTest(EventDataSet["PRI_lep_subleading_pt"][0],EventDataSet["PRI_lep_leading_pt"][0]))
+    EventDataSet["DER_PT_subleading_lepton_ratio_HT"].append(DivisionTest(EventDataSet["PRI_lep_subleading_pt"][0],HTScalar[0])) 
     
     return  pd.DataFrame(EventDataSet)
-        
+
+def EventWeight(ROOTFILE):
+    String = ROOTFILE[:ROOTFILE.find('\\run')]
+    try:
+        File = open(String + r'\run_01_banner.txt' , 'r')
+        LineText = File.readlines()
+        del LineText[0:LineText.index("<MGGenerationInfo>\n") + 1 ]
+        NoofEvents = int(LineText[0].strip().split()[-1])
+        IntegratedWeight = float(LineText[1].strip().split()[-1])
+        return (IntegratedWeight/NoofEvents) * 147 * 1000
+        File.close()
+    except:
+        print('Cannot find file containing the weights of the events.')
+        sys.exit('Stopping program')
     
 
 def DelphesFile(ROOTFILE, EventID):
@@ -178,13 +215,16 @@ def DelphesFile(ROOTFILE, EventID):
     BRANCH = TREE['Event']
     NoofEvents = len(BRANCH['Event.Weight'].array())
     BRANCH = TREE['Weight']
-    
-    event_weight =  BRANCH['Weight.Weight'].array() * Luminosity * 1000
+    event_weight = EventWeight(ROOTFILE)
+    event_weight = [event_weight] * NoofEvents
+    #event_weight =  BRANCH['Weight.Weight'].array() * Luminosity * 1000
     LocEventID = list(range(EventID, EventID + NoofEvents))
     
     BRANCH = TREE['Particle']
     PDGID = BRANCH['Particle.PID'].array()
-    if any(item in np.unique(abs(PDGID[0])) for item in ParticleIDofinterest):
+    
+    
+    if any(item in abs(PDGID[0]) for item in ParticleIDofinterest):
         label_sig = [1] * NoofEvents
     else: 
         label_sig = [0] * NoofEvents
@@ -215,6 +255,10 @@ def DelphesFile(ROOTFILE, EventID):
     Jet_PT = BRANCH['Jet.PT'].array()
     Jet_Eta = BRANCH['Jet.Eta'].array()
     Jet_phi = BRANCH['Jet.Phi'].array()
+    
+    BRANCH = TREE['ScalarHT']
+    HTScalar = BRANCH['ScalarHT.HT'].array()
+    
     ZippedData =  list(zip(LocEventID,
                       event_weight,
                       Muon_pt,
@@ -235,6 +279,7 @@ def DelphesFile(ROOTFILE, EventID):
                       Jet_PT,
                       Jet_Eta,
                       Jet_phi,
+                      HTScalar,
                       label_sig))
     DataSet = CombineEvents(ZippedData[0])
     with Pool(NoofCPU) as pool:
@@ -244,10 +289,34 @@ def DelphesFile(ROOTFILE, EventID):
     pool.join()
     return DataSet
 
-def DELPHESTOCSV2(SelectedDirectory):
+def DELPHESTOCSV2(SelectedDirectory = None, OutputDirectory = None):
+    if SelectedDirectory == None:
+        sys.exit('No directory chosen. Please select the directory containing the events.')
+    try:
+        SelectedDirectory = os.path.normpath(SelectedDirectory)
+        
+    except:
+        sys.exit('Unable to find selected directory.')
+        
+        
+    if OutputDirectory == None:
+        print('Files will be saved in {}'.format(str(SelectedDirectory)))
+        OutputDirectory = SelectedDirectory
+    else:
+        try:
+            OutputDirectory = os.path.normpath(OutputDirectory)
+        except:
+            sys.exit('Unable to find output directory.') 
+        
+        if os.path.exists(OutputDirectory):
+           print('Output folder found.')
+        else:
+           sys.exit('Unable to find output directory.')   
+            
+            
+    
     FileList = []
     EventID = 1
-    SelectedDirectory = os.path.normpath(SelectedDirectory)
     for root, dirs, files in os.walk(SelectedDirectory):
         for names in files:
              if "tag_1_delphes_events.root" in os.path.join(root, names):
@@ -263,7 +332,7 @@ def DELPHESTOCSV2(SelectedDirectory):
     print('Found {} events'.format(max(DataFrame.EventID)))
     print('Finished converting. Saving file....')
     print(DataFrame.head()) 
-    DataFrame.to_csv(SelectedDirectory + r"\EventData.csv", index = False)    
+    DataFrame.to_csv(OutputDirectory + r"\EventData.csv", index = False)    
 
 def DELPHESTOCSV(SelectedDirectory):
     
@@ -293,7 +362,7 @@ def NoofDelphesFiles(SelectedDirectory):
 
     Returns
     -------
-    If there are none or the users chooses to use LHE files then it reurns false.
+    None.
     """
     
     print('Checking for ROOT files')
@@ -312,8 +381,13 @@ def NoofDelphesFiles(SelectedDirectory):
     else:
       sys.exit('No files found ending execution')
 
-if __name__ is '__main__':
+
+if __name__ == '__main__':
+   from tkinter import filedialog as fd
+   
    SelectedDirectory = fd.askdirectory() 
    NoofDelphesFiles(SelectedDirectory)
    DELPHESTOCSV2(SelectedDirectory)
+   
+
     
