@@ -194,9 +194,11 @@ def CombineEvents(EventData):
     return  pd.DataFrame(EventDataSet)
 
 def EventWeight(ROOTFILE):
-    String = ROOTFILE[:ROOTFILE.find('\\run')]
+    head, tail = os.path.split(ROOTFILE)
+    head, tail = os.path.split(head)
+    
     try:
-        File = open(String + r'\run_01_banner.txt' , 'r')
+        File = open(os.path.join(head,'run_01_banner.txt'), 'r')
         LineText = File.readlines()
         del LineText[0:LineText.index("<MGGenerationInfo>\n") + 1 ]
         NoofEvents = int(LineText[0].strip().split()[-1])
@@ -204,6 +206,7 @@ def EventWeight(ROOTFILE):
         return (IntegratedWeight/NoofEvents) * 147 * 1000
         File.close()
     except:
+        print(head)
         print('Cannot find file containing the weights of the events.')
         sys.exit('Stopping program')
     
@@ -332,7 +335,7 @@ def DELPHESTOCSV2(SelectedDirectory = None, OutputDirectory = None):
     print('Found {} events'.format(max(DataFrame.EventID)))
     print('Finished converting. Saving file....')
     print(DataFrame.head()) 
-    DataFrame.to_csv(OutputDirectory + r"\EventData.csv", index = False)    
+    DataFrame.to_csv(os.path.join(OutputDirectory,"EventData.csv"), index = False)    
 
 def DELPHESTOCSV(SelectedDirectory):
     
@@ -388,6 +391,3 @@ if __name__ == '__main__':
    SelectedDirectory = fd.askdirectory() 
    NoofDelphesFiles(SelectedDirectory)
    DELPHESTOCSV2(SelectedDirectory)
-   
-
-    
