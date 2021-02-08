@@ -17,10 +17,11 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import itertools
 from sklearn.metrics import confusion_matrix, f1_score
-from sklearn.metrics import plot_confusion_matrix
 from scipy.stats import uniform
 import Feature_Plots_PCA
 import shap
+import click
+from permutationimportancephysics.PermutationImportance import PermulationImportance
 
 
 def DictionaryPlot(DictList, ChartName):
@@ -214,7 +215,7 @@ class TreeModel():
                        'min_split_loss' : [0, 0.5, 0.8, 1, 2],
                        'reg_gamma' : [0.4],
                        'min_child_weight' : [5]}
-        model = XGBClassifier(objective = "binary:logistic")
+        model = xgb.XGBClassifier(objective = "binary:logistic")
         randomized_mse = RandomizedSearchCV(estimator = model, 
                                             param_distributions=param_grid,
                                             n_iter = NoofTests, scoring='f1', 
@@ -323,7 +324,6 @@ class TreeModel():
         dtest = xgb.DMatrix(self.TestingData.drop(['Events_weight','Label'],axis =1),
                             label=self.TestingData.Label,
                             weight=self.TestingData.Events_weight )
-        evallist = [(dtest, 'eval'), (dtrain, 'train')]
         sum_wpos = sum( self.TrainingData.Events_weight.iloc[i] for i in range(len(self.TrainingData)) if self.TrainingData.Label.iloc[i] == 1.0  )
         sum_wneg = sum( self.TrainingData.Events_weight.iloc[i] for i in range(len(self.TrainingData)) if self.TrainingData.Label.iloc[i] == 0.0  )
         print ('Weight statistics: wpos=%g, wneg=%g, ratio=%g' % ( sum_wpos, sum_wneg, sum_wneg/sum_wpos ))
@@ -401,10 +401,17 @@ class TreeModel():
         print('Number of correctly classified signal events {}. Number of misclassified background events {}'.format(len(s),len(b)))
         s = sum(s)
         b = sum(b)
-        print('The AMS score is {}'.format(s/np.sqrt(b)))
-        return s/np.sqrt(b)
+        if b<=0 or s<=0:
+                return 0
+        try:
+            return np.sqrt(2*((s+b)*np.log(1+float(s)/b)-s))
+        except ValueError:
+                print (1+float(s)/b)
+                print (2*((s+b)*np.log(1+float(s)/b)-s))
+            #return s/sqrt(s+b)
     
-    def SHAPValuePlots(self):
+    def SHAPValuePlots(self,plt_Title=None):
+        
         
         if 'base_score' not in self.HyperParameters:
             explainer = shap.TreeExplainer(self.Model)
@@ -415,9 +422,13 @@ class TreeModel():
                 DataSet = self.df
         
             shap_values = explainer.shap_values(DataSet)
+            MeanSHAP_values = dict(zip(DataSet.columns,np.abs(shap_values).mean(0)))
+                           
             shap.force_plot(explainer.expected_value, shap_values[0,:], DataSet.columns,matplotlib=True)
-            shap.summary_plot(shap_values, DataSet.columns, plot_type="bar")
-            
+            shap.summary_plot(shap_values, DataSet.columns, plot_type="bar",show=False)
+            fig = plt.gcf()
+            fig.suptitle(plt_Title, fontsize = 25)
+            plt.show()
             xmax = shap_values.mean() + 3*shap_values.std()
             xmin = shap_values.mean() - 3*shap_values.std()
                 
@@ -428,7 +439,28 @@ class TreeModel():
             shap_values = np.delete(shap_values,List,0)
             
             shap_values = explainer.shap_values(DataSet)
-            shap.summary_plot(shap_values, DataSet)
+            shap.summary_plot(shap_values, DataSet,show=False)
+            fig1 = plt.gcf()
+            fig1.suptitle(plt_Title, fontsize = 25)
+                      
+            plt.show()
+        
+            return sorted(MeanSHAP_values, key=MeanSHAP_values.get,reverse=True)
+            
+    def FeaturePermutation(self, n_iterations=3,usePredict_poba=True, scoreFunction="AUC",Plot_Title=None):
+        pi = PermulationImportance(model=self.Model,
+                                   X=self.TestingData.drop(['Events_weight','Label'],axis =1),
+                                   y=self.TestingData.Label,
+                                   weights=self.TestingData.Events_weight,
+                                   n_iterations=n_iterations,
+                                   usePredict_poba=usePredict_poba,
+                                   scoreFunction=scoreFunction)
+        #pi.dislayResults()
+        plt = pi.plotBars(PlotTitle = Plot_Title)
+       
+        plt.show()
+        return pi.dislayResults()
+      
         
 # OLD AMS SCORE       
 # np.sqrt(2*(s + b)*np.log(1 + s/b)-s)
@@ -445,7 +477,7 @@ def XGBoostersFeatureComparison(DataSet, Y):
                      'ojective' : 'binary:logistic',
                      'base_score' : 0.2,
                      'alpha' : 1 }
-    model = XGBClassifier(**paramList)
+    model = xgb.XGBClassifier(**paramList)
     if len(np.unique(Y)) == 2:
       for k in range(1, X_train.shape[1] + 1):
         for subset in tqdm(itertools.combinations(range(X_train.shape[1]), k), leave = None):
