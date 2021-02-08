@@ -109,7 +109,14 @@ def FeatureAxesPlot(Dictionary, ax=None, total_width=0.8, single_width=1,):
             x_offset = (i - n_bars/2)*bar_width  + bar_width / 2
             
             X = np.arange(len(Temp))
-            ax.bar(X + x_offset,values, width=bar_width * single_width ,label=key)
+            try:
+              from shap.plots import colors
+              from shap.plots import _utils
+              color = colors.red_blue
+              color = _utils.convert_color(color)
+              ax.bar(X + x_offset,values, width=bar_width * single_width ,label=key, color = color(0))
+            except:
+              ax.bar(X + x_offset,values, width=bar_width * single_width ,label=key)
             i += 1
             
         ax.set_xticks(np.arange(len(Dictionary[k])))
@@ -207,7 +214,9 @@ def test():
         #                   'DER_PT_subleading_lepton_ratio_PT_leading_jet', 
         #                   'DER_PT_subleading_lepton_ratio_HT'],axis=1,inplace=True)
        
-        DataSet.drop(['HT','ST'],axis=1,inplace=True)
+
+        #DataSet.drop(['HT','ST'],axis=1,inplace=True)
+
         
         paramList = {'subsample': 1,
                      'reg_gamma': 0.4,

@@ -138,6 +138,7 @@ class PCAPlotter():
          
         self.df = DataSet
         self.lbl = LabelOfInterest
+        self.Label_For_plots = Label_For_plots
         
         
         
@@ -361,6 +362,9 @@ class PCAPlotter():
         else: 
            DataSet2 = DataSet.drop(labels = self.lbl, axis = 1)
        
+        if self.Label_For_plots != None:
+            DataSet2.rename(columns = self.Label_For_plots, inplace =True)
+
         
         DataSet2.dropna(axis=1,inplace=True)
         scalar = StandardScaler()
@@ -376,10 +380,17 @@ class PCAPlotter():
             from shap.plots import _utils
             color = colors.red_blue
             color = _utils.convert_color(color)
-            
-            
-            ax2.bar(X - width/2,PCAOnePercentage, width, color = color(0),label='PCA1')
-            ax2.bar(X + width/2,PCATwoPercentage, width, color = color(200),label='PCA2')
+            ColourCodes = { 0 : {'Lbl' : 'Background', 'Color' : color(0)},
+                        1 : {'Lbl' : 'Signal',  'Color' : color(200)},
+                        'True Negative' : {'Lbl' : 'True Negative', 'Color' : 'Blue'},
+                        'False Negative' : {'Lbl' : 'False Negative', 'Color' : 'Orange'},
+                        'False positive' : {'Lbl' : 'False positive', 'Color' : 'Green'},
+                        'True positive' : {'Lbl' : 'True positive', 'Color' : 'Red'}, 
+                        'Signal' : {'Lbl' : 'Signal', 'Color' : 'Orange'},
+                        'TTBar' : {'Lbl' : 'TTBar', 'Color' : 'Blue'},
+                        'WWBackGround' : {'Lbl' : 'WWChannel', 'Color' : 'Red'}
+                          }
+
         except:
             ColourCodes = { 0 : {'Lbl' : 'Background', 'Color' : 'Blue'},
                         1 : {'Lbl' : 'Signal',  'Color' : 'Orange'},
