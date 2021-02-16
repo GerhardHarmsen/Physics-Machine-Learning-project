@@ -194,9 +194,11 @@ def CombineEvents(EventData):
     return  pd.DataFrame(EventDataSet)
 
 def EventWeight(ROOTFILE):
-    String = ROOTFILE[:ROOTFILE.find('\\run')]
+    head, tail = os.path.split(ROOTFILE)
+    head, tail = os.path.split(head)
+    
     try:
-        File = open(String + r'\run_01_banner.txt' , 'r')
+        File = open(os.path.join(head,'run_01_banner.txt'), 'r')
         LineText = File.readlines()
         del LineText[0:LineText.index("<MGGenerationInfo>\n") + 1 ]
         NoofEvents = int(LineText[0].strip().split()[-1])
@@ -204,11 +206,12 @@ def EventWeight(ROOTFILE):
         return (IntegratedWeight/NoofEvents) * 147 * 1000
         File.close()
     except:
+        print(head)
         print('Cannot find file containing the weights of the events.')
         sys.exit('Stopping program')
     
 
-def DelphesFile(ROOTFILE, EventID, EventType):
+def DelphesFile(ROOTFILE, EventID):
     File = uproot.open(ROOTFILE)
     # Read data from ROOT files
     TREE = File['Delphes']
@@ -225,9 +228,9 @@ def DelphesFile(ROOTFILE, EventID, EventType):
     
     
     if any(item in abs(PDGID[0]) for item in ParticleIDofinterest):
-        label_sig = [EventType] * NoofEvents
+        label_sig = [1] * NoofEvents
     else: 
-        label_sig = [EventType] * NoofEvents
+        label_sig = [0] * NoofEvents
     
 
     BRANCH = TREE['Muon']
@@ -289,24 +292,7 @@ def DelphesFile(ROOTFILE, EventID, EventType):
     pool.join()
     return DataSet
 
-def DELPHESTOCSV2(EventType, SelectedDirectory = None, OutputDirectory = None):
-    """
-    
-
-    Parameters
-    ----------
-    SignalEvent : TYPE
-        DESCRIPTION.
-    SelectedDirectory : TYPE, optional
-        DESCRIPTION. The default is None.
-    OutputDirectory : TYPE, optional
-        DESCRIPTION. The default is None.
-
-    Returns
-    -------
-    None.
-
-    """
+def DELPHESTOCSV2(SelectedDirectory = None, OutputDirectory = None):
     if SelectedDirectory == None:
         sys.exit('No directory chosen. Please select the directory containing the events.')
     try:
@@ -323,13 +309,12 @@ def DELPHESTOCSV2(EventType, SelectedDirectory = None, OutputDirectory = None):
         try:
             OutputDirectory = os.path.normpath(OutputDirectory)
         except:
-            sys.exit('Unable to convert output directory to path type.') 
+            sys.exit('Unable to find output directory.') 
         
         if os.path.exists(OutputDirectory):
            print('Output folder found.')
         else:
-           os.mkdir(OutputDirectory) 
-           print('Folder {} created.'.format(OutputDirectory))
+           sys.exit('Unable to find output directory.')   
             
             
     
@@ -342,17 +327,33 @@ def DELPHESTOCSV2(EventType, SelectedDirectory = None, OutputDirectory = None):
                   
     for Files in tqdm(FileList):
         if EventID == 1:
-            DataFrame = DelphesFile(Files, EventID, EventType)
+            DataFrame = DelphesFile(Files, EventID)
             EventID = max(DataFrame.EventID) + 1
         else:
-            DataFrame = DataFrame.append(DelphesFile(Files, EventID, EventType))
+            DataFrame = DataFrame.append(DelphesFile(Files, EventID))
             EventID = max(DataFrame.EventID) + 1
-            
-        
     print('Found {} events'.format(max(DataFrame.EventID)))
     print('Finished converting. Saving file....')
     print(DataFrame.head()) 
-    DataFrame.to_csv(OutputDirectory + r"\EventData.csv", index = False)    
+    DataFrame.to_csv(os.path.join(OutputDirectory,"EventData.csv"), index = False)    
+
+def DELPHESTOCSV(SelectedDirectory):
+    
+    EventID = 1
+    SelectedDirectory = os.path.normpath(SelectedDirectory)
+    for root, dirs, files in os.walk(SelectedDirectory):
+        for names in files:
+             if "tag_1_delphes_events.root" in os.path.join(root, names):
+                 if EventID == 1:
+                     DataFrame = DelphesFile(os.path.join(root, names), EventID)
+                     EventID = max(DataFrame.EventID) + 1
+                 else:
+                     DataFrame = DataFrame.append(DelphesFile(os.path.join(root, names), EventID))
+                     EventID = max(DataFrame.EventID) + 1
+    print('Found {} events'.format(max(DataFrame.EventID)))
+    print('Finished converting. Saving file....')
+    print(DataFrame.head()) 
+    DataFrame.to_csv(SelectedDirectory + r"\EventData.csv", index = False)    
 
 def NoofDelphesFiles(SelectedDirectory):
     """Tests if there are ROOT files in the directory. 
@@ -390,6 +391,3 @@ if __name__ == '__main__':
    SelectedDirectory = fd.askdirectory() 
    NoofDelphesFiles(SelectedDirectory)
    DELPHESTOCSV2(SelectedDirectory)
-   
-
-    
