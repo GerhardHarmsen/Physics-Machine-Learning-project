@@ -364,7 +364,6 @@ class PCAPlotter():
        
         if self.Label_For_plots != None:
             DataSet2.rename(columns = self.Label_For_plots, inplace =True)
-
         
         DataSet2.dropna(axis=1,inplace=True)
         scalar = StandardScaler()
@@ -389,8 +388,9 @@ class PCAPlotter():
                         'Signal' : {'Lbl' : 'Signal', 'Color' : 'Orange'},
                         'TTBar' : {'Lbl' : 'TTBar', 'Color' : 'Blue'},
                         'WWBackGround' : {'Lbl' : 'WWChannel', 'Color' : 'Red'}
-                          }
-
+                      }
+            
+            
         except:
             ColourCodes = { 0 : {'Lbl' : 'Background', 'Color' : 'Blue'},
                         1 : {'Lbl' : 'Signal',  'Color' : 'Orange'},
