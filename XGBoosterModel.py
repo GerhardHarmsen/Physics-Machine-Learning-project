@@ -159,18 +159,13 @@ class TreeModel():
         
         self.TestingData = pd.concat([X_test,y_test],axis=1)
         
-        # for the test, we selected 25% of the data, so we need to scale up the weights to get something similar
-        #so what we get a prediction independent of the number of events we have selected. This is why we rescale for test
-        # note that the weights for the test are the same as the original weights
-        # in the case of training, we rescale so that the signal and background have equal sum weights. It doesn't hurt to do this
-        # (sometimes it is not necessary, but never a bad thing)
         class_weights_train = (self.TrainingData.Events_weight[self.TrainingData.Label == 0].sum(), self.TrainingData.Events_weight[self.TrainingData.Label == 1].sum())
 
         for i in range(len(class_weights_train)):
             #training dataset: equalize number of background and signal
-            self.TrainingData.Events_weight[self.TrainingData.Label == i] *= max(class_weights_train)/ class_weights_train[i]
+            self.TrainingData.loc[self.TrainingData.Label == i,'Events_weight'] *= max(class_weights_train)/ class_weights_train[i]
             #test dataset : increase test weight to compensate for sampling
-            self.TestingData.Events_weight[self.TestingData.Label == i] *= 1/(test_size)
+            self.TestingData.loc[self.TestingData.Label == i,'Events_weight'] *= 1/(test_size)
 
 
         
@@ -203,7 +198,11 @@ class TreeModel():
             
         """
                 
-        DataSet = self.TrainingData.sample(n=50000)
+        try:
+        	DataSet = self.TrainingData.sample(n=50000)
+        except:
+        	DataSet = self.TrainingData	
+        
         Labels = DataSet.Label
         
         #SHAP does not for some reason work with the base score feature.
@@ -225,7 +224,7 @@ class TreeModel():
                        'min_split_loss' : [0, 0.5, 0.8, 1, 2],
                        'reg_gamma' : [0, 1, 5],
                        'min_child_weight' : [5]}
-        model = xgb.XGBClassifier(objective = "binary:logistic")
+        model = xgb.XGBClassifier(objective = "binary:logistic", verbosity=0,use_label_encoder=False)
         randomized_mse = RandomizedSearchCV(estimator = model, 
                                             param_distributions=param_grid,
                                             n_iter = NoofTests, scoring='f1', 
