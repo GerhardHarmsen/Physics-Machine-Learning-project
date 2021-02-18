@@ -94,7 +94,7 @@ def Pipeline(DataSet, paramList = None,Plot_titles=None):
     return MeanSHAPValues, MeanPermValues
     
 
-def FeatureAxesPlot(Dictionary, ax=None, total_width=0.8, single_width=1,):
+def FeatureAxesPlot(Dictionary, ax=None, total_width=0.8, single_width=1,YAxisTicks=None):
         if ax is None:
             ax = plt.gca()
             
@@ -127,12 +127,16 @@ def FeatureAxesPlot(Dictionary, ax=None, total_width=0.8, single_width=1,):
             i += 1
          
         ax.set_xticks(np.arange(len(Dictionary[k])))
+        
+        if type(YAxisTicks) is np.ndarray:
+            ax.set_yticks(YAxisTicks) 
+                
         ax.set_xticklabels(list(sorted(Dictionary[k])),rotation='vertical',fontsize=PlotLabelSize)
         ax.tick_params(axis='y', labelsize=PlotLabelSize)
         ax.legend()
         return ax
 
-def FeaturePermutationComparisonPlot(DictCases, PlotTitle=''):
+def FeaturePermutationComparisonPlot(DictCases, PlotTitle='', YLabel ='', YAxisTicks = None):
     fig, axes = plt.subplots(nrows = 1, ncols = 3 , figsize=(40 * 3, 40))
     
     for i in range(3):
@@ -153,13 +157,13 @@ def FeaturePermutationComparisonPlot(DictCases, PlotTitle=''):
                 TempDict['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])] = DictCases['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])]
             except:
                 TempDict['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])] = DictCases['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])]
-        FeatureAxesPlot(TempDict, ax=axes[i])
+        FeatureAxesPlot(TempDict, ax=axes[i], YAxisTicks=YAxisTicks)
         axes[i].legend()
        
     axes[0].set_title('Compact case',fontsize = PlotTitleSize)
     axes[1].set_title('Medium compact case',fontsize = PlotTitleSize)
     axes[2].set_title('Split case',fontsize = PlotTitleSize)
-    axes[0].set_ylabel('Feature permutation importance', fontsize =  PlotLabelSize)
+    axes[0].set_ylabel(YLabel, fontsize =  PlotLabelSize)
     
     fig.suptitle(PlotTitle,fontsize=PlotTitleSize)
     plt.show()
@@ -312,7 +316,7 @@ def CompareModelwithothermasscases(SMuonInModel, NeutralinoMassInModel,UseF1Scor
         AMSScore['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = {'AMS Score' :XGBModel.AMSScore(DataSet),
                                                                                           'F1 Score' : F1Score}
 
-    FeaturePermutationComparisonPlot(AMSScore, PlotTitle='AMS Scores for a model trained on the Smuon Mass {} Neatralino {} dataset'.format(SMuonInModel,NeutralinoMassInModel))
+    FeaturePermutationComparisonPlot(AMSScore, PlotTitle='AMS Scores for a model trained on the Smuon Mass {} Neatralino {} dataset'.format(SMuonInModel,NeutralinoMassInModel), YAxisTicks=np.arange(0,1,0.1))
         
     print(AMSScore)
     
