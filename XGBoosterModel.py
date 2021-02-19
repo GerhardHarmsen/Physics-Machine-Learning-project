@@ -223,7 +223,7 @@ class TreeModel():
                        'reg_alpha' : uniform(0,0.6),
                        'min_split_loss' : [0, 0.5, 0.8, 1, 2, 5],
                        'min_child_weight' : [5]}
-        model = xgb.XGBClassifier(objective = "binary:logistic", verbosity=1,use_label_encoder=False)
+        model = xgb.XGBClassifier(objective = "binary:logistic", verbosity=1,use_label_encoder=False, eval_metric = 'logloss')
         randomized_mse = RandomizedSearchCV(estimator = model, 
                                             param_distributions=param_grid,
                                             n_iter = NoofTests, scoring='f1', 
