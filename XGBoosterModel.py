@@ -227,7 +227,7 @@ class TreeModel():
         randomized_mse = RandomizedSearchCV(estimator = model, 
                                             param_distributions=param_grid,
                                             n_iter = NoofTests, scoring='f1', 
-                                            n_jobs =-1, cv=4, verbose = 1)
+                                            n_jobs =1, cv=4, verbose = 1)
         randomized_mse.fit(DataSet.drop(['Events_weight','Label'],axis=1), Labels)
         print('Best parameters found: ', randomized_mse.best_params_)
         print('Best accuracy found: ', np.sqrt(np.abs(randomized_mse.best_score_)))
