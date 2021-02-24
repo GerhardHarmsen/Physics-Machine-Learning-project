@@ -50,6 +50,6 @@ def CodeToRun(SignalEventCSV,BackgroundCSV,JSONSaveFolder, NoofTests = 400, Noof
        AllDict['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = HyperParameters(SMUONMASS[i], NEUTRALINOMASS[i],SignalEventCSV,BackgroundCSV,NoofTests,Noof_jobs)
        
     print(AllDict)
-    with open(os.path.join(JSONSaveFolder,'HyperparameterDictionaryTest.json'), 'w') as json_file:
+    with open(os.path.join(JSONSaveFolder,'HyperparameterDictionary.json'), 'w') as json_file:
         json.dump(AllDict, json_file)
         
