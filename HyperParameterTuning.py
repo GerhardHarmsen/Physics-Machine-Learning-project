@@ -16,7 +16,7 @@ import multiprocessing as mp
 import os
 import tqdm
 
-def HyperParameters(Smuon_Mass, Neutralino_Mass,SignalEventCSV,BackgroundCSV):
+def HyperParameters(Smuon_Mass, Neutralino_Mass,SignalEventCSV,BackgroundCSV,NoofTests,Noof_jobs):
     HyperParameterResults = dict()    
     BackGroundData=pd.read_csv(os.path.join(BackgroundCSV, 'EventData.csv'))
     BackGroundData.drop('EventID',axis=1,inplace=True)
@@ -32,21 +32,24 @@ def HyperParameters(Smuon_Mass, Neutralino_Mass,SignalEventCSV,BackgroundCSV):
     XGBModel = TreeModel(DataSet,ApplyDataCut=False)
     
     
-    XGBModel.HyperParameterTuning(400)
+    XGBModel.HyperParameterTuning(NoofTests,Noof_jobs)
 
     return XGBModel.HyperParameters
 
 
-def CodeToRun(SignalEventCSV,BackgroundCSV,JSONSaveFolder):
+def CodeToRun(SignalEventCSV,BackgroundCSV,JSONSaveFolder, NoofTests = 400, Noof_jobs = -1):
     NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
     SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200]
+    
+    NEUTRALINOMASS=[270]
+    SMUONMASS=[360]
     
     AllDict = dict()
     
     for i in tqdm.tqdm(range(len(SMUONMASS))):
-       AllDict['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = HyperParameters(SMUONMASS[i], NEUTRALINOMASS[i],SignalEventCSV,BackgroundCSV)
+       AllDict['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = HyperParameters(SMUONMASS[i], NEUTRALINOMASS[i],SignalEventCSV,BackgroundCSV,NoofTests,Noof_jobs)
        
     print(AllDict)
-    with open(os.path.join(JSONSaveFolder,'HyperparameterDictionary.json'), 'w') as json_file:
+    with open(os.path.join(JSONSaveFolder,'HyperparameterDictionaryTest.json'), 'w') as json_file:
         json.dump(AllDict, json_file)
         
