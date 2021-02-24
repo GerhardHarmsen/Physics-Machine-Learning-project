@@ -11,7 +11,9 @@ import Feature_Plots_PCA
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import pickle
+import json
+from tqdm import tqdm
+
 
 PlotTitleSize = 80
 PlotLabelSize = 60
@@ -199,12 +201,12 @@ def RenameDataBaseColumns(DataSet):
 
 
 def SaveDictionary(FileName,DictionaryToSave):
-    with open(FileName, "wb") as myFile:
-        pickle.dump(DictionaryToSave, myFile)
+    with open(FileName, "w") as myFile:
+        json.dump(DictionaryToSave, myFile)
         
 def RetrieveDictionary(FileLocation):
-    with open(FileLocation, "rb") as myFile:
-        return pickle.load(myFile)
+    with open(FileLocation, "r") as myFile:
+        return json.load(myFile)
 
 def test():
     NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
@@ -271,15 +273,10 @@ def CompareModelwithothermasscases(SMuonInModel, NeutralinoMassInModel,UseF1Scor
                              'DER_PT_subleading_lepton_ratio_HT'],axis=1)
     
     RenameDataBaseColumns(DataSet)
+    JSONParameters = RetrieveDictionary(r'I:\CSV\HyperparameterDictionary.json')
     
-    paramList = {'subsample': 1,
-                     'reg_gamma': 0.4,
-                     'reg_alpha': 0.1,
-                     'n_estimators': 200,
-                     'min_split_loss': 2,
-                     'min_child_weight': 5,
-                     'max_depth': 5,
-                     'learning_rate': 0.1}
+    paramList = JSONParameters['Smuon_Mass_{}_Neatralino_{}'.format(SMuonInModel,NeutralinoMassInModel)]
+    print(paramList)
         
     XGBModel = TreeModel(DataSet,paramList = paramList,ApplyDataCut=False) 
     
@@ -320,11 +317,16 @@ def CompareModelwithothermasscases(SMuonInModel, NeutralinoMassInModel,UseF1Scor
         
     print(AMSScore)
     
+    return AMSScore
+    
 def runAllComparisons(UseF1Score=False):
     NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
     SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200]
-    for i in range(len(SMUONMASS)):
-        CompareModelwithothermasscases(SMUONMASS[i], NEUTRALINOMASS[i],UseF1Score=UseF1Score)
+    DictReturn = dict()
+    for i in tqdm(range(len(SMUONMASS))):
+        DictReturn['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = CompareModelwithothermasscases(SMUONMASS[i], NEUTRALINOMASS[i],UseF1Score=UseF1Score)
+        SaveDictionary(r'I:\Results For Particle Physics\AMSScores.json',DictReturn)    
+   
     
 def CompareModelwithandwithoutratios(DataSet):
     #### Train model
