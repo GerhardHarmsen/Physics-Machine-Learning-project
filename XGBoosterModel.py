@@ -245,7 +245,7 @@ class TreeModel():
         print(str(timedelta(seconds=(end_time-start_time).seconds)))
     
         results_df = pd.DataFrame(results, columns=['f1_score', 'std', 'best_iter', 'param_dict']).sort_values('f1_score',ascending=False)
-        display(results_df.head())
+        print(results_df.head())
     
         best_params = results_df.iloc[0]['param_dict']
         return best_params, results_df    
@@ -284,7 +284,7 @@ class TreeModel():
                               }       
                 
        	
-        df = self.TrainingData
+        df = self.TrainingData.sample(frac=0.5)
         
         
         response = 'Label'
@@ -423,7 +423,7 @@ class TreeModel():
 
         """
         # split data into train and test sets
-        num_round = 200
+        num_round = 2000
         dtrain = xgb.DMatrix(self.TrainingData.drop(['Events_weight','Label'],axis =1),
                              label=self.TrainingData.Label,
                              weight=self.TrainingData.Events_weight)
@@ -449,9 +449,9 @@ class TreeModel():
         for i in AdjustWeights:
             paramList['scale_pos_weight'] = sum_wneg/sum_wpos * i
             if UseF1Score:
-                self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False,  maximize = True)
+                self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=100, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False,  maximize = True)
             else:
-                self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
+                self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=100, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
             Results.append(self.Model.best_score)
         print('Weight Adjust complete')
         print('Adjusting the weight by {}'.format(AdjustWeights[Results.index(max(Results))]))
