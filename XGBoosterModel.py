@@ -15,7 +15,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.utils import resample
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from sklearn.metrics import confusion_matrix, f1_score
+from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
 from scipy.stats import uniform
 import Feature_Plots_PCA
 import shap
@@ -180,81 +180,6 @@ class TreeModel():
         print ("Train : total weight bkg", self.TrainingData.Events_weight[self.TrainingData.Label == 0].sum())           
         
         
-    
-
-    def my_cv(self, df, predictors, response, kfolds, classifier, verbose=False):
-        """Roll our own CV 
-        train each kfold with early stopping
-        return average metric, sd over kfolds, average best round"""
-        EARLY_STOPPING_ROUNDS=100  # stop if no improvement after 100 rounds
-        metrics = []
-        best_iterations = []
-        
-
-        for train_fold, cv_fold in kfolds.split(df): 
-            fold_X_train=df[predictors].values[train_fold]
-            fold_y_train=df[response].values[train_fold]
-            fold_X_test=df[predictors].values[cv_fold]
-            fold_y_test=df[response].values[cv_fold]
-            classifier.fit(fold_X_train, fold_y_train,
-                      early_stopping_rounds=EARLY_STOPPING_ROUNDS,
-                      eval_set=[(fold_X_test, fold_y_test)],
-                      eval_metric=inverse_xgb_f1,
-                      verbose=0,
-                     )
-            y_pred_test=classifier.predict(fold_X_test)
-            y_pred_test = (y_pred_test > 0.5).astype(int)
-            metrics.append(f1_score(fold_y_test,y_pred_test))
-            best_iterations.append(classifier.best_iteration)
-        return np.average(metrics), np.std(metrics), np.average(best_iterations)
-        
-    def cv_over_param_dict(self, df, param_dict, predictors, response, kfolds, verbose=False):
-        """given a list of dictionaries of xgb params
-        run my_cv on params, store result in array
-        return updated param_dict, results dataframe
-        """
-        
-        from datetime import datetime, timedelta
-        
-        BOOST_ROUNDS=50000
-        start_time = datetime.now()
-        print("%-20s %s" % ("Start Time", start_time))
-        
-        results = []
-        
-        for i, d in enumerate(param_dict):
-            model = xgb.XGBClassifier(objective = "binary:logistic",
-                                  n_estimators=BOOST_ROUNDS,
-                                  verbosity=0,
-                                  random_state=2012, 
-                                  n_jobs=-1,
-                                  booster='gbtree',
-                                  eval_metric = inverse_xgb_f1,
-                                  use_label_encoder=False,
-                                  maximize = True,
-                                  **d)
-        
-            metric, metric_std, best_iteration = self.my_cv(df, predictors, response, kfolds, model, verbose=False)    
-            results.append([metric, metric_std, best_iteration, d])
-            if i % 100 == 0:
-                print("%s %3d result mean: %.6f std: %.6f, iter: %.2f" % (datetime.strftime(datetime.now(), "%T"), i, metric, metric_std, best_iteration))
-        
-        end_time = datetime.now()
-        print("%-20s %s" % ("Start Time", start_time))
-        print("%-20s %s" % ("End Time", end_time))
-        print(str(timedelta(seconds=(end_time-start_time).seconds)))
-    
-        results_df = pd.DataFrame(results, columns=['f1_score', 'std', 'best_iter', 'param_dict']).sort_values('f1_score',ascending=False)
-<<<<<<< HEAD
-        print(results_df.head())
-=======
-        display(results_df.head())
->>>>>>> UpdateToHyperparameterScan
-    
-        best_params = results_df.iloc[0]['param_dict']
-        return best_params, results_df    
-
-
     def HyperParameterTuning(self, NoofTests = 200, No_jobs = -1):
         """
         Function for selecting the optimum values for the hyperparmeters to use for the XGBoost model.
@@ -273,73 +198,42 @@ class TreeModel():
             
             
         """
-        from sklearn.model_selection import KFold 
-        from itertools import product
-        RANDOMSTATE = 2012
-        
-        
-        kfolds = KFold(n_splits=10, shuffle=True, random_state=RANDOMSTATE)
-        
-        current_params = {'max_depth': 5,
-                          'colsample_bytree': 0.5,
-                          'colsample_bylevel': 0.5,
-                          'subsample': 0.5,
-                          'learning_rate': 0.01,
-                              }       
-                
-       	
-<<<<<<< HEAD
-        df = self.TrainingData.sample(frac=0.5)
-=======
-        df = self.TrainingData
->>>>>>> UpdateToHyperparameterScan
-        
-        
-        response = 'Label'
-        predictors = df.drop(['Events_weight','Label'],axis=1).columns
-        
-        ##################################################
-        # round 1: tune depth
-        ##################################################
-        max_depths = list(range(2,8))
-        grid_search_dicts = [{'max_depth': md} for md in max_depths]
-        # merge into full param dicts
-        full_search_dicts = [{**current_params, **d} for d in grid_search_dicts]
-        
-        # cv and get best params
-        current_params, results_df = self.cv_over_param_dict(df, full_search_dicts, predictors, response, kfolds)
-        
-                
-        ##################################################
-        # round 2: tune subsample, colsample_bytree, colsample_bylevel
-        ##################################################
-        subsamples = np.linspace(0.01, 1.0, 10)
-        colsample_bytrees = np.linspace(0.1, 1.0, 10)
-        colsample_bylevel = np.linspace(0.1, 1.0, 10)
-        # narrower search
-        # subsamples = np.linspace(0.25, 0.75, 11)
-        # colsample_bytrees = np.linspace(0.1, 0.3, 5)
-        # colsample_bylevel = np.linspace(0.1, 0.3, 5)
-        # subsamples = np.linspace(0.4, 0.9, 11)
-        # colsample_bytrees = np.linspace(0.05, 0.25, 5)
-            
-        grid_search_dicts = [dict(zip(['subsample', 'colsample_bytree', 'colsample_bylevel'], [a, b, c])) 
-                             for a,b,c in product(subsamples, colsample_bytrees, colsample_bylevel)]
-        # merge into full param dicts
-        full_search_dicts = [{**current_params, **d} for d in grid_search_dicts]
-        # cv and get best params
-        current_params, results_df = self.cv_over_param_dict(df, full_search_dicts, predictors, response, kfolds)
-        
-        # round 3: learning rate
-        learning_rates = np.logspace(-3, -1, 5)
-        grid_search_dicts = [{'learning_rate': lr} for lr in learning_rates]
-        # merge into full param dicts
-        full_search_dicts = [{**current_params, **d} for d in grid_search_dicts]
+        try:
+        	DataSet = self.TrainingData.sample(n=50000)
+        except:
+        	DataSet = self.TrainingData	
 
-        # cv and get best params
-        current_params, results_df = self.cv_over_param_dict(df, full_search_dicts, predictors, response, kfolds, verbose=False)
-        
-        self.HyperParameters = current_params
+        Labels = DataSet.Label
+
+        #SHAP does not for some reason work with the base score feature.
+        param_grid =  { 'learning_rate' : [0.01, 0.1, 0.5, 0.9],
+                       'n_estimators' : [10, 50, 100, 150, 200],
+                       'subsample': [0.3, 0.5, 0.9],
+                       'max_depth': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                       #'base_score' : [0.1, 0.5, 0.9],
+                       'reg_alpha' : [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+                       'min_split_loss' : [0, 0.5, 0.8, 1, 2],
+                       'reg_gamma' : [0.1, 0.2, 0.3, 0.4, 0.5, 0.6 ],
+                       'min_child_weight' : range(5,8)}
+        #### We are goiing to keep some parameters constant during this test. If you wish to test all parameters delete the below paramgrid.
+        param_grid =  { 'learning_rate' : uniform(loc=0.01, scale=1), ###Uniform creates a distribution of [loc, loc + scale]
+                       'n_estimators' : [200],
+                       'subsample': uniform(loc=0.8,scale=0.2),
+                       'max_depth': list(range(4,11)),
+                       'reg_alpha' : uniform(0,0.6),
+                       'min_split_loss' : [0, 0.5, 0.8, 1, 2, 5],
+                       'min_child_weight' : [5]}
+        model = xgb.XGBClassifier(objective = "binary:logistic", verbosity=1,use_label_encoder=False, eval_metric = 'logloss')
+        randomized_mse = RandomizedSearchCV(estimator = model, 
+                                            param_distributions=param_grid,
+                                            n_iter = NoofTests, scoring='f1', 
+                                            n_jobs =1, cv=4, verbose = 1)
+        randomized_mse.fit(DataSet.drop(['Events_weight','Label'],axis=1), Labels)
+        print('Best parameters found: ', randomized_mse.best_params_)
+        print('Best accuracy found: ', np.sqrt(np.abs(randomized_mse.best_score_)))
+        self.HyperParameterResults = randomized_mse
+        self.HyperParameters = randomized_mse.best_params_
+        return randomized_mse.best_params_
         
               
         
@@ -489,7 +383,9 @@ class TreeModel():
             print("Accuracy: %.2f%%" % (accuracy * 100.0))
         elif Metric == 'f1':
             _, accuracy = xgb_f1(predictions, Matrix)
-            print("F1 Score: %.2f%%" % (accuracy))            
+            print("F1 Score: %.2f%%" % (accuracy)) 
+        elif Metric == 'auc':
+            accuracy = roc_auc_score(Matrix.get_label(), predictions)
         
         GXBoost_confusion = confusion_matrix(Y,predictions,normalize=None)
         print('{} events misclassified as true with an ams score of {}'.format(GXBoost_confusion[0,1], self.AMSScore(DataSet)))

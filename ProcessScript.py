@@ -13,10 +13,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import json
 from tqdm import tqdm
+from multiprocessing import Pool, cpu_count
 
+NoofCPU = cpu_count()
 
 PlotTitleSize = 80
 PlotLabelSize = 60
+
+#### Known mass cases
+
+NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
+SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200]
+
 
 def Pipeline(DataSet, paramList = None,Plot_titles=None):
     DataSet = DataCuts(DataSet)
@@ -251,87 +259,82 @@ def test():
     
     SaveDictionary("I:\Results For Particle Physics\Feature Dictionaries\MeanPermValues_No_ratios.txt",MeanPermValues)
 
-
-def CompareModelwithothermasscases(SMuonInModel, NeutralinoMassInModel,UseF1Score=False):
-    #### Train model
-    BackGroundData=pd.read_csv(r'I:\CSV\Background_Events\EventData.csv')
-    BackGroundData.drop('EventID',axis=1,inplace=True)    
-   
-    SignalEvents = pd.read_csv('I:\CSV\Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}\EventData.csv'.format(SMuonInModel,NeutralinoMassInModel))
-    SignalEvents.drop(['EventID'],axis=1,inplace=True)  
+class MultiThreadModelComparison():
+    def __init__(self,SMuonForModel,NeutralinoForModel,UseF1Score=False):
+        BackGroundData=pd.read_csv(r'I:\CSV\Background_Events\EventData.csv')
+        BackGroundData.drop('EventID',axis=1,inplace=True)    
+        self.BackGroundDataTest=pd.read_csv(r'I:\CSV\Background_Events_test\EventData.csv')
+        self.BackGroundDataTest.drop('EventID',axis=1,inplace=True)   
         
-    DataSet = pd.concat([BackGroundData,SignalEvents])
-    DataSet.sample(frac=1)
-    
-    DataSet = DataCuts(DataSet)
-    
-    DataSet2 = DataSet.drop(['DER_PT_leading_lepton_ratio_PT_leading_jet', 
-                             'DER_PT_leading_lept_ratio_HT', 
-                             'DER_ST_ratio_PT_Leading_jet', 
-                             'DER_ST_ratio_HT', 
-                             'DER_PT_subleading_lepton_ratio_PT_leading_jet', 
-                             'DER_PT_subleading_lepton_ratio_HT'],axis=1)
-    
-    RenameDataBaseColumns(DataSet)
-    JSONParameters = RetrieveDictionary(r'I:\CSV\HyperparameterDictionary.json')
-    
-    paramList = JSONParameters['Smuon_Mass_{}_Neatralino_{}'.format(SMuonInModel,NeutralinoMassInModel)]
-    print(paramList)
-        
-    XGBModel = TreeModel(DataSet,paramList = paramList,ApplyDataCut=False) 
-    
-    XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
-    
-    AMSScore = dict()
-    
-    ### TESTDATASETS
-    
-    NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
-    SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200]
-    
-    for i in range(len(SMUONMASS)):
-        Path = 'I:\CSV\Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i])
-        SignalEvents = pd.read_csv(Path)
-        
+        SignalEvents = pd.read_csv('I:\CSV\Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}\EventData.csv'.format(SMuonForModel,NeutralinoForModel))
         SignalEvents.drop(['EventID'],axis=1,inplace=True)  
         
         DataSet = pd.concat([BackGroundData,SignalEvents])
-        DataSet.sample(frac=1) 
+        DataSet.sample(frac=1)
         
         DataSet = DataCuts(DataSet)
         
-        DataSet2 = DataSet.drop(['DER_PT_leading_lepton_ratio_PT_leading_jet', 
-                             'DER_PT_leading_lept_ratio_HT', 
-                             'DER_ST_ratio_PT_Leading_jet', 
-                             'DER_ST_ratio_HT', 
-                             'DER_PT_subleading_lepton_ratio_PT_leading_jet', 
-                             'DER_PT_subleading_lepton_ratio_HT'],axis=1)
-        
         RenameDataBaseColumns(DataSet)
         
-        F1Score = XGBModel.ModelPredictions(DataSet, Metric='f1')
-        AMSScore['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = {'AMS Score' :XGBModel.AMSScore(DataSet),
-                                                                                          'F1 Score' : F1Score}
-
-    FeaturePermutationComparisonPlot(AMSScore, PlotTitle='AMS Scores for a model trained on the Smuon Mass {} Neatralino {} dataset'.format(SMuonInModel,NeutralinoMassInModel), YAxisTicks=np.arange(0,1,0.1))
+        JSONParameters = RetrieveDictionary(r'I:\CSV\HyperparameterDictionary.json')
+        paramList = JSONParameters['Smuon_Mass_{}_Neatralino_{}'.format(SMuonForModel,NeutralinoForModel)]
         
-    print(AMSScore)
+        self.Results=dict()
+        
+        self.TrainModel(DataSet,paramList,UseF1Score)
+     
+   
+    def TrainModel(self,DataSet,paramList,UseF1Score):
+        self.XGBModel = TreeModel(DataSet,paramList = paramList,ApplyDataCut=False) 
+        
+        self.XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
+        
+          
+        
+    def MultiThreadTest(self,SMuon_Neutralino):
+        
+        SMuon, Neutralino = SMuon_Neutralino
+        
+        
+        SignalEvents = pd.read_csv('I:\CSV\Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}\EventData.csv'.format(SMuon,Neutralino))
+        SignalEvents.drop(['EventID'],axis=1,inplace=True)  
+            
+        DataSet = pd.concat([self.BackGroundDataTest,SignalEvents])
+        DataSet.sample(frac=1)
     
-    return AMSScore
+        DataSet = DataCuts(DataSet)
     
-def runAllComparisons(UseF1Score=False):
-    from multiprocessing import Process, Manager 
-    NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
-    SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200]
-    
-    manager = Manager()
-    
-    DictReturn = manager.dict()
+        RenameDataBaseColumns(DataSet)
+        
+        F1Score = self.XGBModel.ModelPredictions(DataSet, Metric='f1')
+        AUCScores = self.XGBModel.ModelPredictions(DataSet, Metric='auc')
+        SigWeight = DataSet.Events_weight[DataSet.Label == 1].sum()
+        self.Results['Smuon_Mass_{}_Neatralino_{}'.format(SMuon,Neutralino)] = {'AMS Score' :self.XGBModel.AMSScore(DataSet),
+                                                                                              'F1 Score' : F1Score,
+                                                                                              'auc Score' : AUCScores,
+                                                                                              'Signal Weight' : SigWeight}
 
-    
+#def runAllComparisons(UseF1Score=False):
+
+if __name__ == '__main__':
+    UseF1Score=True             
+    DictReturn = dict()    
     for i in tqdm(range(len(SMUONMASS))):
-        DictReturn['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = CompareModelwithothermasscases(SMUONMASS[i], NEUTRALINOMASS[i],UseF1Score=UseF1Score)
-        SaveDictionary(r'I:\Results For Particle Physics\AMSScores_1.json',DictReturn)    
+        TestCase = MultiThreadModelComparison(SMUONMASS[i],NEUTRALINOMASS[i],UseF1Score)
+        
+        ZippedEvents = zip(SMUONMASS,NEUTRALINOMASS)
+        
+        #with Pool(NoofCPU) as pool:
+        #    pool.imap(TestCase.MultiThreadTest,[Event for Event in ZippedEvents])
+        #
+        #pool.close()
+        #pool.join() 
+         
+        for Events in ZippedEvents:
+            TestCase.MultiThreadTest(Events)
+        print(TestCase.Results)
+        DictReturn['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])]=TestCase.Results
+        SaveDictionary(r'I:\Results For Particle Physics\AMS_AUC_Scores.json',DictReturn)    
    
     
 def CompareModelwithandwithoutratios(DataSet):
