@@ -245,7 +245,11 @@ class TreeModel():
         print(str(timedelta(seconds=(end_time-start_time).seconds)))
     
         results_df = pd.DataFrame(results, columns=['f1_score', 'std', 'best_iter', 'param_dict']).sort_values('f1_score',ascending=False)
+<<<<<<< HEAD
         print(results_df.head())
+=======
+        display(results_df.head())
+>>>>>>> UpdateToHyperparameterScan
     
         best_params = results_df.iloc[0]['param_dict']
         return best_params, results_df    
@@ -284,7 +288,11 @@ class TreeModel():
                               }       
                 
        	
+<<<<<<< HEAD
         df = self.TrainingData.sample(frac=0.5)
+=======
+        df = self.TrainingData
+>>>>>>> UpdateToHyperparameterScan
         
         
         response = 'Label'

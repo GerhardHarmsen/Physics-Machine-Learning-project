@@ -320,12 +320,18 @@ def CompareModelwithothermasscases(SMuonInModel, NeutralinoMassInModel,UseF1Scor
     return AMSScore
     
 def runAllComparisons(UseF1Score=False):
+    from multiprocessing import Process, Manager 
     NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
     SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200]
-    DictReturn = dict()
+    
+    manager = Manager()
+    
+    DictReturn = manager.dict()
+
+    
     for i in tqdm(range(len(SMUONMASS))):
         DictReturn['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = CompareModelwithothermasscases(SMUONMASS[i], NEUTRALINOMASS[i],UseF1Score=UseF1Score)
-        SaveDictionary(r'I:\Results For Particle Physics\AMSScores.json',DictReturn)    
+        SaveDictionary(r'I:\Results For Particle Physics\AMSScores_1.json',DictReturn)    
    
     
 def CompareModelwithandwithoutratios(DataSet):

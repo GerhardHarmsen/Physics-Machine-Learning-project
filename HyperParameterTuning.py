@@ -40,13 +40,20 @@ def HyperParameters(Smuon_Mass, Neutralino_Mass,SignalEventCSV,BackgroundCSV,Noo
 def CodeToRun(SignalEventCSV,BackgroundCSV,JSONSaveFolder, NoofTests = 400, Noof_jobs = -1):
     NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
     SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200]
+<<<<<<< HEAD
       
+=======
+    
+    NEUTRALINOMASS=[270]
+    SMUONMASS=[360]
+    
+>>>>>>> UpdateToHyperparameterScan
     AllDict = dict()
     
     for i in tqdm.tqdm(range(len(SMUONMASS))):
        AllDict['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = HyperParameters(SMUONMASS[i], NEUTRALINOMASS[i],SignalEventCSV,BackgroundCSV,NoofTests,Noof_jobs)
        
     print(AllDict)
-    with open(os.path.join(JSONSaveFolder,'HyperparameterDictionary.json'), 'w') as json_file:
+    with open(os.path.join(JSONSaveFolder,'HyperparameterDictionaryTest.json'), 'w') as json_file:
         json.dump(AllDict, json_file)
         
