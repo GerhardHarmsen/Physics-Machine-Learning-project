@@ -37,7 +37,7 @@ def HyperParameters(Smuon_Mass, Neutralino_Mass,SignalEventCSV,BackgroundCSV,Noo
     return XGBModel.HyperParameters
 
 
-def CodeToRun(SignalEventCSV,BackgroundCSV,JSONSaveFolder, NoofTests = 400, Noof_jobs = 1):
+def CodeToRun(SignalEventCSV,BackgroundCSV,JSONSaveFolder, NoofTests = 200, Noof_jobs = 1):
     NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
     SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200]
     
