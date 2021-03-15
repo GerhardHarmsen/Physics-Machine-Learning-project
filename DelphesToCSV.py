@@ -193,15 +193,14 @@ def CombineEvents(EventData):
     
     return  pd.DataFrame(EventDataSet)
 
-def EventWeight(ROOTFILE):
-    head, tail = os.path.split(ROOTFILE)
+def EventWeight(Banner_File, NoofEvents):
+    head, tail = os.path.split(Banner_File)
     head, tail = os.path.split(head)
     
     try:
         File = open(os.path.join(head,'run_01_banner.txt'), 'r')
         LineText = File.readlines()
         del LineText[0:LineText.index("<MGGenerationInfo>\n") + 1 ]
-        NoofEvents = int(LineText[0].strip().split()[-1])
         IntegratedWeight = float(LineText[1].strip().split()[-1])
         return (IntegratedWeight/NoofEvents) * 147 * 1000
         File.close()
@@ -211,14 +210,14 @@ def EventWeight(ROOTFILE):
         sys.exit('Stopping program')
     
 
-def DelphesFile(ROOTFILE, EventID):
+def DelphesFile(ROOTFILE, EventID, DataSet_Label):
     File = uproot.open(ROOTFILE)
     # Read data from ROOT files
     TREE = File['Delphes']
     BRANCH = TREE['Event']
     NoofEvents = len(BRANCH['Event.Weight'].array())
     BRANCH = TREE['Weight']
-    event_weight = EventWeight(ROOTFILE)
+    event_weight = EventWeight(ROOTFILE, NoofEvents)
     event_weight = [event_weight] * NoofEvents
     #event_weight =  BRANCH['Weight.Weight'].array() * Luminosity * 1000
     LocEventID = list(range(EventID, EventID + NoofEvents))
@@ -226,11 +225,7 @@ def DelphesFile(ROOTFILE, EventID):
     BRANCH = TREE['Particle']
     PDGID = BRANCH['Particle.PID'].array()
     
-    
-    if any(item in abs(PDGID[0]) for item in ParticleIDofinterest):
-        label_sig = [1] * NoofEvents
-    else: 
-        label_sig = [0] * NoofEvents
+    label_sig = [DataSet_Label] * NoofEvents
     
 
     BRANCH = TREE['Muon']
@@ -292,7 +287,7 @@ def DelphesFile(ROOTFILE, EventID):
     pool.join()
     return DataSet
 
-def DELPHESTOCSV2(SelectedDirectory = None, OutputDirectory = None):
+def DELPHESTOCSV2(DataSet_Label, SelectedDirectory = None, OutputDirectory = None):
     if SelectedDirectory == None:
         sys.exit('No directory chosen. Please select the directory containing the events.')
     try:
@@ -327,10 +322,10 @@ def DELPHESTOCSV2(SelectedDirectory = None, OutputDirectory = None):
                   
     for Files in tqdm(FileList):
         if EventID == 1:
-            DataFrame = DelphesFile(Files, EventID)
+            DataFrame = DelphesFile(Files, EventID, DataSet_Label)
             EventID = max(DataFrame.EventID) + 1
         else:
-            DataFrame = DataFrame.append(DelphesFile(Files, EventID))
+            DataFrame = DataFrame.append(DelphesFile(Files, EventID, DataSet_Label))
             EventID = max(DataFrame.EventID) + 1
     print('Found {} events'.format(max(DataFrame.EventID)))
     print('Finished converting. Saving file....')
@@ -389,5 +384,7 @@ if __name__ == '__main__':
    from tkinter import filedialog as fd
    
    SelectedDirectory = fd.askdirectory() 
+   DataSet_Label = input('Type 1 for signal and 0 for background type events.')
    NoofDelphesFiles(SelectedDirectory)
-   DELPHESTOCSV2(SelectedDirectory)
+   DELPHESTOCSV2(DataSet_Label, SelectedDirectory) 
+   print()
