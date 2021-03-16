@@ -216,10 +216,11 @@ def DelphesFile(ROOTFILE, EventID, DataSet_Label):
     TREE = File['Delphes']
     BRANCH = TREE['Event']
     NoofEvents = len(BRANCH['Event.Weight'].array())
-    BRANCH = TREE['Weight']
-    event_weight = EventWeight(ROOTFILE, NoofEvents)
-    event_weight = [event_weight] * NoofEvents
+    #event_weight = EventWeight(ROOTFILE, NoofEvents)
+    #event_weight = [event_weight] * NoofEvents
     #event_weight =  BRANCH['Weight.Weight'].array() * Luminosity * 1000
+    LEAF = BRANCH['Event.Weight'].array()
+    event_weight = [(LEAF[i][0] * 147 * 1000) for i in range(len(LEAF))]
     LocEventID = list(range(EventID, EventID + NoofEvents))
     
     BRANCH = TREE['Particle']
