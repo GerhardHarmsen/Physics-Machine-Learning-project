@@ -193,7 +193,7 @@ def CombineEvents(EventData):
     
     return  pd.DataFrame(EventDataSet)
 
-def EventWeight(Banner_File, NoofEvents):
+def EventWeight_old(Banner_File, NoofEvents):
     head, tail = os.path.split(Banner_File)
     head, tail = os.path.split(head)
     
@@ -202,13 +202,64 @@ def EventWeight(Banner_File, NoofEvents):
         LineText = File.readlines()
         del LineText[0:LineText.index("<MGGenerationInfo>\n") + 1 ]
         IntegratedWeight = float(LineText[1].strip().split()[-1])
-        return (IntegratedWeight/NoofEvents) * 147 * 1000
+        return (IntegratedWeight) * 147 * 1000
         File.close()
     except:
         print(head)
         print('Cannot find file containing the weights of the events.')
         sys.exit('Stopping program')
+
+def DetectMADSpinRun(ROOTFILE_Event_folder):
+    ROOTFILE_Event_folder = os.path.join(ROOTFILE_Event_folder,'run_01')
     
+    try:
+        with open(os.path.join(ROOTFILE_Event_folder,'MADSpin_Check.txt'),'r') as MyFile:
+            LineText = MyFile.readlines()
+            del LineText[0:LineText.index("<MADSpinTest>\n") + 1 ]
+            if LineText[0].strip().split()[-1] == 'True':
+                return True
+            else:
+                return False
+            
+    except:
+        with uproot.open(os.path.join(ROOTFILE_Event_folder,'unweighted_events.root')) as RootFile:
+            TREE = RootFile['LHEF']
+            BRANCH = TREE['Event']
+            Nparticles = list(BRANCH['Event.Nparticles'].array())
+        Results = np.unique(Nparticles)
+        Diff = [Results[i] - Results[i-1] for i in range(1,len(Results))]
+        with open(os.path.join(ROOTFILE_Event_folder,'MADSpin_Check.txt'),'w') as MyFile:
+            MyFile.write("When MADSpin is run the number of deteted events in the root files is not reliable, as it doubles the number of events.\n")
+            MyFile.write("This file tells the script DelphesToCSV.py written by Gerhard Harmsen whether or not MADSpin has been written.\n")
+            MyFile.write('The script will then know to divide the number of events given in "run_banner.txt" by 2 to get the correct number of events.\n')
+            MyFile.write('This allows for the correct event weights when MADSpin has been run.\n')
+            MyFile.write('<MADSpinTest>\n')
+            if max(Diff) > 1:
+                MyFile.write('MADSpin run : True\n')
+            else:
+                MyFile.write('MADSpin run : False\n')
+            MyFile.write('</MADSpinTest>\n')
+        
+        if max(Diff) > 1:
+            return True
+        else:
+            return False
+
+
+def EventWeight(ROOTFILE):
+    head, _ = os.path.split(ROOTFILE)
+    head, _ = os.path.split(head)
+    with open(os.path.join(head,'run_01_banner.txt'), 'r') as MGFile:
+        LineText = MGFile.readlines()
+    del LineText[0:LineText.index("<MGGenerationInfo>\n") + 1 ]
+    cross_section = float(LineText[1].strip().split()[-1])
+    NoofEvents = int(LineText[0].strip().split()[-1])
+   
+    MADSpin =  DetectMADSpinRun(head)       
+    if MADSpin:
+        NoofEvents = NoofEvents / 2
+    
+    return ((cross_section/NoofEvents) * 147 * 1000)
 
 def DelphesFile(ROOTFILE, EventID, DataSet_Label):
     File = uproot.open(ROOTFILE)
@@ -216,11 +267,10 @@ def DelphesFile(ROOTFILE, EventID, DataSet_Label):
     TREE = File['Delphes']
     BRANCH = TREE['Event']
     NoofEvents = len(BRANCH['Event.Weight'].array())
-    #event_weight = EventWeight(ROOTFILE, NoofEvents)
-    #event_weight = [event_weight] * NoofEvents
-    #event_weight =  BRANCH['Weight.Weight'].array() * Luminosity * 1000
+    
+    event_weight = EventWeight(ROOTFILE)
+    event_weight = [event_weight] * NoofEvents
     LEAF = BRANCH['Event.Weight'].array()
-    event_weight = [(LEAF[i][0] * 147 * 1000) for i in range(len(LEAF))]
     LocEventID = list(range(EventID, EventID + NoofEvents))
     
     BRANCH = TREE['Particle']
