@@ -193,6 +193,7 @@ def CombineEvents(EventData):
     
     return  pd.DataFrame(EventDataSet)
 
+
 def EventWeight_old(Banner_File, NoofEvents):
     head, tail = os.path.split(Banner_File)
     head, tail = os.path.split(head)
@@ -261,16 +262,17 @@ def EventWeight(ROOTFILE):
     
     return ((cross_section/NoofEvents) * 147 * 1000)
 
+
 def DelphesFile(ROOTFILE, EventID, DataSet_Label):
     File = uproot.open(ROOTFILE)
     # Read data from ROOT files
     TREE = File['Delphes']
     BRANCH = TREE['Event']
     NoofEvents = len(BRANCH['Event.Weight'].array())
-    
+   
     event_weight = EventWeight(ROOTFILE)
     event_weight = [event_weight] * NoofEvents
-    LEAF = BRANCH['Event.Weight'].array()
+
     LocEventID = list(range(EventID, EventID + NoofEvents))
     
     BRANCH = TREE['Particle']
