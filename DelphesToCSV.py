@@ -14,6 +14,8 @@ import multiprocessing as mp
 import uproot
 import click
 from multiprocessing import Pool, cpu_count
+import vector
+from mt2 import mt2
 
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -59,9 +61,19 @@ def DivisionTest(Numerator, Denominator):
         return Numerator/Denominator
     except:
         return np.nan
+    
+def MuonMT2(Muon1,Muon2, MET, MET_eta, MET_phi, InvisibleMass):
+    MissingEnergy = vector.obj(rho=MET[0],eta=MET_eta[0],phi=MET_phi[0])
+    
+    val = mt2(
+    0.11, Muon1.x, Muon1.y,  # Visible 1: mass, px, py
+    0.11, Muon2.x, Muon2.y,  # Visible 2: mass, px, py
+    MissingEnergy.x, MissingEnergy.y,  # Missing transverse momentum: x, y
+    0, 0)  # Invisible 1 mass, invisible 2 mass
+    return val
 
 def CombineEvents(EventData):
-    EventID, event_weight, Muon_pt, Muon_eta, Muon_phi, Muon_d0, Muon_dz, Electron_pt, Electron_eta, Electron_phi, Electron_d0, Electron_dz, MET, MET_eta, MET_phi, Tau_Tag, B_Tag, Jet_PT, Jet_Eta, Jet_phi, HTScalar, label_sig = EventData
+    EventID, event_weight, Muon_pt, Muon_eta, Muon_phi, Muon_d0, Muon_dz, Electron_pt, Electron_eta, Electron_phi, Electron_d0, Electron_dz, MET, MET_eta, MET_phi, InvisibleMass, Tau_Tag, B_Tag, Jet_PT, Jet_Eta, Jet_phi, HTScalar, label_sig = EventData
     if (len(Electron_pt) > 0 ) & (len(Jet_PT) > 0): 
         ElectronSet = list(zip(Electron_pt, Electron_eta, Electron_phi, Electron_d0, Electron_dz))
         JetSet = list(zip(Tau_Tag, B_Tag, Jet_PT, Jet_Eta, Jet_phi))
@@ -102,11 +114,21 @@ def CombineEvents(EventData):
                     "DER_ST_ratio_HT" : [],
                     "DER_PT_subleading_lepton_ratio_PT_leading_jet" : [],
                     "DER_PT_subleading_lepton_ratio_HT" : [],
+                    "PRI_nMuons" : [],
+                    "PRI_Muon_leading_pt" : [],
+                    "PRI_Muon_subleading_pt" : [],
+                    "PRI_Muon_leading_eta" : [],
+                    "PRI_Muon_subleading_eta" : [],
+                    "PRI_Muon_leading_phi" : [],
+                    "PRI_Muon_subleading_phi" : [],
+                    "DER_Muon_invariant_mass" : [],
+                    "DER_MT2_variable" : [],
                     "Events_weight" : [],
                     "Label" : []}
     
     EventDataSet["EventID"].append(EventID)
     EventDataSet["Events_weight"].append(event_weight)
+    ### JET INFORMATION ###############################
     EventDataSet["PRI_jets"].append(len(JetSet))
     if len(JetSet) >= 2:
        EventDataSet["PRI_leading_jet_pt" ].append(JetSet[0][2])
@@ -190,25 +212,60 @@ def CombineEvents(EventData):
     EventDataSet["DER_ST_ratio_HT"].append(DivisionTest(ST,HTScalar[0]))
     EventDataSet["DER_PT_subleading_lepton_ratio_PT_leading_jet"].append(DivisionTest(EventDataSet["PRI_lep_subleading_pt"][0],EventDataSet["PRI_lep_leading_pt"][0]))
     EventDataSet["DER_PT_subleading_lepton_ratio_HT"].append(DivisionTest(EventDataSet["PRI_lep_subleading_pt"][0],HTScalar[0])) 
+    ########## MUON DATA ############################################
+    EventDataSet["PRI_nMuons"].append(len(MuonSet))
+    if len(MuonSet) >= 2:
+            ###Values for leading and sub-leading muons######
+            EventDataSet["PRI_Muon_leading_pt"].append(MuonSet[0][0])
+            EventDataSet["PRI_Muon_subleading_pt"].append(MuonSet[1][0])
+            
+            EventDataSet["PRI_Muon_leading_eta"].append(MuonSet[0][1])
+            EventDataSet["PRI_Muon_subleading_eta"].append(MuonSet[1][1])
+            
+            EventDataSet["PRI_Muon_leading_phi"].append(MuonSet[0][2])
+            EventDataSet["PRI_Muon_subleading_phi"].append(MuonSet[1][2])
+            ###GET THE MUON INVARIANT MASS####
+            Muon1 = vector.obj(rho=MuonSet[0][0],eta=MuonSet[0][1],phi=MuonSet[0][2],mass=0.11)
+            Muon2 = vector.obj(rho=MuonSet[1][0],eta=MuonSet[1][1],phi=MuonSet[1][2],mass=0.11)
+            InvMass = (Muon1+Muon2).mass
+            EventDataSet["DER_Muon_invariant_mass"].append(InvMass)
+            EventDataSet["DER_MT2_variable"].append(MuonMT2(Muon1,Muon2, MET, MET_eta, MET_phi, InvisibleMass))
+                
+            
+            
+    elif len(MuonSet) == 1:
+            ###Values for leading and sub-leading muons######
+            EventDataSet["PRI_Muon_leading_pt"].append(MuonSet[0][0])
+            EventDataSet["PRI_Muon_subleading_pt"].append(np.nan)
+            
+            EventDataSet["PRI_Muon_leading_eta"].append(MuonSet[0][1])
+            EventDataSet["PRI_Muon_subleading_eta"].append(np.nan)
+            
+            EventDataSet["PRI_Muon_leading_phi"].append(MuonSet[0][2])
+            EventDataSet["PRI_Muon_subleading_phi"].append(np.nan)
+            ###GET THE MUON INVARIANT MASS####
+            EventDataSet["DER_Muon_invariant_mass"].append(0.11)
+            EventDataSet["DER_MT2_variable"].append(np.nan)
+            
+            
+    elif len(MuonSet) == 0:
+            ###Values for leading and sub-leading muons######
+            EventDataSet["PRI_Muon_leading_pt"].append(np.nan)
+            EventDataSet["PRI_Muon_subleading_pt"].append(np.nan)
+            
+            EventDataSet["PRI_Muon_leading_eta"].append(np.nan)
+            EventDataSet["PRI_Muon_subleading_eta"].append(np.nan)
+            
+            EventDataSet["PRI_Muon_leading_phi"].append(np.nan)
+            EventDataSet["PRI_Muon_subleading_phi"].append(np.nan)
+            ###GET THE MUON INVARIANT MASS####
+            EventDataSet["DER_Muon_invariant_mass"].append(np.nan)
+            EventDataSet["DER_MT2_variable"].append(np.nan)
+    
+    
     
     return  pd.DataFrame(EventDataSet)
 
-
-def EventWeight_old(Banner_File, NoofEvents):
-    head, tail = os.path.split(Banner_File)
-    head, tail = os.path.split(head)
-    
-    try:
-        File = open(os.path.join(head,'run_01_banner.txt'), 'r')
-        LineText = File.readlines()
-        del LineText[0:LineText.index("<MGGenerationInfo>\n") + 1 ]
-        IntegratedWeight = float(LineText[1].strip().split()[-1])
-        return (IntegratedWeight) * 147 * 1000
-        File.close()
-    except:
-        print(head)
-        print('Cannot find file containing the weights of the events.')
-        sys.exit('Stopping program')
 
 def DetectMADSpinRun(ROOTFILE_Event_folder):
     ROOTFILE_Event_folder = os.path.join(ROOTFILE_Event_folder,'run_01')
@@ -261,24 +318,43 @@ def EventWeight(ROOTFILE):
         NoofEvents = NoofEvents / 2
     
     return ((cross_section/NoofEvents) * 147 * 1000)
+        
+        
+def NeutralinoMass(ROOTFILE):
+    head, tail = os.path.split(ROOTFILE)
+    head, tail = os.path.split(head)
+    
+    File = open(os.path.join(head,'run_01_banner.txt'), 'r')
+    LineText = File.readlines()
+    NeutrinoMass = 0
+    for i in LineText:
+        if '1000022' in i :
+           if 'mneu1' in i:
+              NeutrinoMass = float(i.strip().split()[1])
+              break
+    return NeutrinoMass
+    
 
-
-def DelphesFile(ROOTFILE, EventID, DataSet_Label):
+def DelphesFile(ROOTFILE, EventID):
     File = uproot.open(ROOTFILE)
     # Read data from ROOT files
     TREE = File['Delphes']
     BRANCH = TREE['Event']
     NoofEvents = len(BRANCH['Event.Weight'].array())
-   
+    BRANCH = TREE['Weight']
     event_weight = EventWeight(ROOTFILE)
     event_weight = [event_weight] * NoofEvents
-
+    #event_weight =  BRANCH['Weight.Weight'].array() * Luminosity * 1000
     LocEventID = list(range(EventID, EventID + NoofEvents))
     
     BRANCH = TREE['Particle']
     PDGID = BRANCH['Particle.PID'].array()
     
-    label_sig = [DataSet_Label] * NoofEvents
+    
+    if any(item in abs(PDGID[0]) for item in ParticleIDofinterest):
+        label_sig = [1] * NoofEvents
+    else: 
+        label_sig = [0] * NoofEvents
     
 
     BRANCH = TREE['Muon']
@@ -310,6 +386,8 @@ def DelphesFile(ROOTFILE, EventID, DataSet_Label):
     BRANCH = TREE['ScalarHT']
     HTScalar = BRANCH['ScalarHT.HT'].array()
     
+    InvisibleMass = [NeutralinoMass(ROOTFILE)] * NoofEvents
+    
     ZippedData =  list(zip(LocEventID,
                       event_weight,
                       Muon_pt,
@@ -325,6 +403,7 @@ def DelphesFile(ROOTFILE, EventID, DataSet_Label):
                       MET,
                       MET_eta,
                       MET_phi,
+                      InvisibleMass,
                       Tau_Tag,
                       B_Tag,
                       Jet_PT,
@@ -340,7 +419,7 @@ def DelphesFile(ROOTFILE, EventID, DataSet_Label):
     pool.join()
     return DataSet
 
-def DELPHESTOCSV2(DataSet_Label, SelectedDirectory = None, OutputDirectory = None):
+def DELPHESTOCSV2(SelectedDirectory = None, OutputDirectory = None):
     if SelectedDirectory == None:
         sys.exit('No directory chosen. Please select the directory containing the events.')
     try:
@@ -375,10 +454,10 @@ def DELPHESTOCSV2(DataSet_Label, SelectedDirectory = None, OutputDirectory = Non
                   
     for Files in tqdm(FileList):
         if EventID == 1:
-            DataFrame = DelphesFile(Files, EventID, DataSet_Label)
+            DataFrame = DelphesFile(Files, EventID)
             EventID = max(DataFrame.EventID) + 1
         else:
-            DataFrame = DataFrame.append(DelphesFile(Files, EventID, DataSet_Label))
+            DataFrame = DataFrame.append(DelphesFile(Files, EventID))
             EventID = max(DataFrame.EventID) + 1
     print('Found {} events'.format(max(DataFrame.EventID)))
     print('Finished converting. Saving file....')
@@ -392,6 +471,7 @@ def DELPHESTOCSV(SelectedDirectory):
     for root, dirs, files in os.walk(SelectedDirectory):
         for names in files:
              if "tag_1_delphes_events.root" in os.path.join(root, names):
+                 print(os.path.join(root, names))
                  if EventID == 1:
                      DataFrame = DelphesFile(os.path.join(root, names), EventID)
                      EventID = max(DataFrame.EventID) + 1
@@ -437,7 +517,5 @@ if __name__ == '__main__':
    from tkinter import filedialog as fd
    
    SelectedDirectory = fd.askdirectory() 
-   DataSet_Label = input('Type 1 for signal and 0 for background type events.')
    NoofDelphesFiles(SelectedDirectory)
-   DELPHESTOCSV2(DataSet_Label, SelectedDirectory) 
-   print()
+   DELPHESTOCSV2(SelectedDirectory)

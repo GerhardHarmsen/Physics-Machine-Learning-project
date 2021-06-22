@@ -24,6 +24,8 @@ class PermulationImportance:
             self.scoreFunction = self.auc_score
         elif scoreFunction == "amsasimov":
             self.scoreFunction = self.significance_score
+        elif scoreFunction == "F1":
+            self.scoreFunction = self.F1_score            
         else:
             self.scoreFunction = scoreFunction
 
@@ -69,7 +71,20 @@ class PermulationImportance:
         vZ = [amsasimov(s=sumsig,b=sumbkg) for (sumsig,sumbkg) in zip(int_sig,int_bkg)]
         bestiZ = max(vZ)
         return bestiZ
-
+    
+    def F1_score(self, X_eval, y_true, weights):
+        #@FIXME: Use AUC that can handle negative weights instead
+        from sklearn.metrics import f1_score
+       
+        X_eval = DMatrix(X_eval)
+        if self.usePredict_poba:
+            y_pred = self.model.predict_proba(X_eval)[:,1].ravel() # do here to allow flexibility for custom score function
+        else:
+            y_pred = self.model.predict(X_eval).ravel()
+        
+        y_bin = (y_pred > 0.1).astype(int)
+        return f1_score(y_true,y_bin,sample_weight=weights)
+    
     def shuffle_column(self, X):
        
        for col in X.columns:
