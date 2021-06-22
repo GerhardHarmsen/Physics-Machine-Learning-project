@@ -13,98 +13,119 @@ import matplotlib.pyplot as plt
 import numpy as np
 import json
 from tqdm import tqdm
+import os
 from multiprocessing import Pool, cpu_count
+import sys
 
 NoofCPU = cpu_count()
+sys.path.insert(0, r'I:\Google Drive\Research\Post Doc\Python Codes')
 
 PlotTitleSize = 80
 PlotLabelSize = 60
 
+##### These are the cut offs for the diffirent mass regimes. The valuess here refer to the ratio Smuon/Neutralino
+
+CompressedCutOff = 1.2
+NeutralCutOff = 3
+
 #### Known mass cases
 
-NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
-SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200]
+#### SMuon Neutralino mass cases
+NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96, 175, 87, 125, 100, 70, 100, 68, 120, 150, 75, 300, 500, 440, 260]
+SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200, 350, 350, 375, 260, 350, 300, 275, 475, 300, 450, 310, 510, 450, 275]
+
+#### Locations of the  CSV Files########
+CSVLOCATION = r'G:\CSV'
+BACKGROUNDEVENTPATH = r'Background_Events\EventData.csv'
+TESTBACKGROUNDEVENTPATH = r'Background_Events_test\EventData.csv'
+HYPERPARAMETERLOCATION = r'G:\CSV\HyperparameterDictionary.json'
+
+### Begin function declaration ######
+def Test_for_Files():
+    StopRun=False
+
+    for i in range(len(SMUONMASS)):
+        try:
+            DataSet = pd.read_csv(os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i])))
+        except:
+            print('Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{} is missing.'.format(SMUONMASS[i],NEUTRALINOMASS[i]))
+            StopRun=True
+            
+    if StopRun:
+        print('Files missing stopping the run')
+        sys.exit()
 
 
-def Pipeline(DataSet, paramList = None,Plot_titles=None):
-    DataSet = DataCuts(DataSet)
-    
-    Key = { 'PRI_nleps' : r'$N_{\ell}$',
-           'PRI_jets' : r'$N_{jets}$',
-           'PRI_leading_jet_pt' : r'$jet_{PT}^{(1)}$',
-           'PRI_subleading_jet_pt' : r'$jet_{PT}^{(2)}$',
-           'PRI_leading_jet_eta' : r'$jet_{\eta}^{(1)}$',
-           'PRI_subleading_jet_eta' : r'$jet_{\eta}^{(2)}$',
-           'PRI_lep_leading_pt' : r'$\ell_{PT}^{(1)}$',
-           'PRI_lep_subleading_pt' : r'$\ell_{PT}^{(2)}$',
-           'PRI_lep_leading_eta' : r'$\ell_{\eta}^{(1)}$',
-           'PRI_lep_subleading_eta' : r'$\ell_{\eta}^{(2)}$',
-           'PRI_lep_leading_phi' : r'$\ell_{\phi}^{(1)}$',
-           'PRI_lep_subleading_phi' : r'$\ell_{\phi}^{(2)}$',
-           'DER_P_T_ratio_lep_pair' : r'$\frac{\ell_{PT}^{(1)}}{\ell_{PT}^{(2)}}$',
-           'DER_Diff_Eta_lep_pair' : r'$abs(\ell_{\eta}^{(1)} - \ell_{\eta}^{(2)})$',
-           'DER_Diff_Phi_lep_pair' : r'$abs(\ell_{\phi}^{(1)} - \ell_{\phi}^{(2)})$',
-           'DER_sum_P_T' : r'$\sum(PT)$',
-           'PRI_Missing_pt' : r'MissingPT',
-           'DER_PT_leading_lepton_ratio_PT_leading_jet' : r'$\frac{\ell_{PT}^{(1)}}{jet_{PT}^{(1)}}$',
-           'DER_PT_leading_lept_ratio_HT' : r'$\frac{\ell_{PT}^{(1)}}{HT}$',
-           'DER_ST_ratio_PT_Leading_jet' : r'$\frac{ST}{jet_{PT}^{(1)}}$',
-           'DER_ST_ratio_HT' : r'$\frac{ST}{HT}$',
-           'DER_PT_subleading_lepton_ratio_PT_leading_jet' : r'$\frac{\ell_{PT}^{(2)}}{jet_{PT}^{(1)}}$',
-           'DER_PT_subleading_lepton_ratio_HT' : r'$\frac{\ell_{PT}^{(2)}}{HT}$'   }
-    
-    try:
-        DataSet.drop(['EventID'],axis=1,inplace=True)
-    except:
-        pass
+def SelectLabels_of_interest(Dict,No_of_labels):
+    """
+    This function selects the labels that are most useful according to the feature permuatation analysis.
 
-    PCAPlots = PCAPlotter(DataSet,'Label', Key)
-    PCAPlots.PCAAnalysis()
+    Parameters
+    ----------
+    Dict : dict.
+        Dictionary containing the labels and permutation importances.
+    No_of_labels : TYPE
+        Numbor of labels to consider after removing those that do not contribute to the model.
+
+    Returns
+    -------
+    TYPE
+        List of labels to be used in the new model.
+
+    """
+    List_of_labels = list()
+    Dict_of_Labels_and_values = dict()
+    for k in Dict.keys():
+        Temp = dict(sorted(Dict[k].items(),key=lambda item: item[1],reverse=True))
+        Temp = dict(list(Temp.items())[:No_of_labels])
+        for keys in Temp.keys():
+            if keys not in Dict_of_Labels_and_values.keys():
+                Dict_of_Labels_and_values[keys] = Temp[keys]
+            elif Dict_of_Labels_and_values[keys] < Temp[keys]:
+                Dict_of_Labels_and_values[keys] = Temp[keys]
+
+    Dict_of_Labels_and_values = dict(sorted(Dict_of_Labels_and_values.items(),key=lambda item: item[1],reverse=True))
+    List_of_labels = dict(list(Dict_of_Labels_and_values.items())[:No_of_labels])
+    print(List_of_labels)
+    return list(List_of_labels.keys())
     
-   
-    
-    DataSet.rename(columns=Key,inplace=True) 
-    
-    if paramList == None:
-        XGBModel = TreeModel(DataSet,ApplyDataCut=False) 
-        XGBModel.HyperParameterTuning()
-    else:
-        XGBModel = TreeModel(DataSet,ApplyDataCut=False, paramList=paramList) 
+def Convert_to_Label(String, Style = 1):
+    Neutralino = int(String[(String.rindex('_')+1):])
+    Smuon = int(String[(String.rindex('Mass_')+5):(String.rindex('Mass_')+8)])
+    if Style == 1 :
+        Smuon_string = r'$m_{\bar{\mu}}$'
+        Neutralino_string = r'$m_{\bar{\chi}}$'
+        String = '{} = {} GeV, {} = {} GeV'.format(Smuon_string, Smuon, Neutralino_string, Neutralino)
+    elif Style == 2:
+        String = '({}, {})'.format(Smuon, Neutralino)
+    return String
         
-    XGBModel.XGBoostTrain()
-    MeanSHAPValues = XGBModel.SHAPValuePlots(Plot_titles)
-    
-    
-    MeanPermValues = XGBModel.FeaturePermutation(usePredict_poba=False,Plot_Title=Plot_titles)
-    
-    #PCAMag = {}
-    #for items in PCAPlots.FeaturePCAValues['Leptons 2 Jets 2']:
-    #    PCAMag[items] = np.sqrt(sum(abs(PCAPlots.FeaturePCAValues['Leptons 2 Jets 2'][items])))
-    #PCAMag.pop('PRI_nleps')
-    #PCAMag.pop('PRI_jets')
-    #PCAMag = dict(sorted(PCAMag.items(), key=lambda item: item[1]))
-    #
-    #DropColumns = list(PCAMag.keys())[:8]
-    #print(DropColumns) 
-    #
-    #DataSet.drop(DropColumns,axis=1,inplace=True)
-    #DataSet.drop('DER_PT_subleading_lepton_ratio_PT_leading_jet',axis=1,inplace = True)
-    
-    #PCAPlots = PCAPlotter(DataSet,'Label')
-    #PCAPlots.PCAAnalysis()
-    
-    #if paramList == None:
-    #    XGBModel = TreeModel(DataSet,SubSampleDataSet=False,ApplyDataCut=False) 
-    #    XGBModel.HyperParameterTuning()
-    #else:
-    #    XGBModel = TreeModel(DataSet,SubSampleDataSet=False,ApplyDataCut=False, paramList=paramList) 
-    #    
-    #XGBModel.XGBoostTrain()
-    #XGBModel.SHAPValuePlots(Plot_titles)
-    return MeanSHAPValues, MeanPermValues
-    
 
-def FeatureAxesPlot(Dictionary, ax=None, total_width=0.8, single_width=1,YAxisTicks=None):
+def FeatureAxesPlot(Dictionary, ax=None, total_width=0.8, single_width=1,YAxisTicks=None,Max_No_of_Labels=None):
+        """
+        This is an internal function used by FeaturePermutationComparisonPlot
+    
+        Parameters
+        ----------
+        Dictionary : Dictionary
+            This must be a dictionary of the type generated by the below comparison functions {Mass Case: {Comparison : Value}}.
+        ax : TYPE, Axis
+            Plot axis to be used for plotting. The default is None.
+        total_width : float32, optional
+            Largest width of the columns. The default is 0.8.
+        single_width : float, optional
+            Single column width. The default is 1.
+        YAxisTicks : List with YAxis tick values, optional
+            Numpy array of YAxis ticks for customising the Y Axis. The default is None.
+        Max_No_of_Labels : Integer, optional
+            Maximum number of labels to add to the X Axis. The default is None.
+
+        Returns
+        -------
+        ax : Axis
+            Returns the plot on the specified axis.
+
+        """
         if ax is None:
             ax = plt.gca()
             
@@ -115,64 +136,134 @@ def FeatureAxesPlot(Dictionary, ax=None, total_width=0.8, single_width=1,YAxisTi
         bar_width = total_width / n_bars
         i = 0
         YMax = 0
-        for k in Dictionary.keys():
+        New_dict = dict()
+        
+        if Max_No_of_Labels is not None:
+            ListofLabels = SelectLabels_of_interest(Dictionary,Max_No_of_Labels)
+            for keys in Dictionary.keys():
+                New_dict[keys] = { Keys : Dictionary[keys][Keys] for Keys in ListofLabels}
+                
+            Dictionary = New_dict
             
+        else:
+            Max_No_of_Labels = len(Dictionary[list(Dictionary.keys())[0]])
+            ListofLabels = SelectLabels_of_interest(Dictionary,Max_No_of_Labels)
+        
+          
+        for k in Dictionary.keys():
             key = k
-            Temp = dict(sorted(Dictionary[k].items()))
-            keys = Temp.keys()
-            values = Temp.values()
+            #Temp = dict(sorted(Dictionary[k].items()))
+            #keys = Temp.keys()
+            #values = Temp.values()
+            keys = Dictionary[k].keys()
+            values = Dictionary[k].values()
+           
             x_offset = (i - n_bars/2)*bar_width  + bar_width / 2
             
-            X = np.arange(len(Temp))
-            if max(Temp.values()) > YMax:
-                YMax = max(Temp.values())
+            #X = np.arange(len(Temp))
+            #if max(Temp.values()) > YMax:
+            #    YMax = max(Temp.values())
+            
+            X = np.arange(len(Dictionary[k]))
+            if max(Dictionary[k].values()) > YMax:
+                YMax = max(Dictionary[k].values())
+            
             try:
               from shap.plots import colors
               from shap.plots import _utils
               color = colors.red_blue
               color = _utils.convert_color(color)
-              ax.bar(X + x_offset,values, width=bar_width * single_width ,label=key, color = color(50 * i))
+              mycols=["darkorange", "cornflowerblue", "tab:olive", "teal", "orangered", "gold", "lightpink", "mediumaquamarine", "red", "deepskyblue", "lightcoral", "powderblue", "yellowgreen"]
+              ax.bar(X + x_offset,values, width=bar_width * single_width ,label=Convert_to_Label(key,2), color = mycols[i])
+              
             except:
-              ax.bar(X + x_offset,values, width=bar_width * single_width ,label=key)
+              ax.bar(X + x_offset,values, width=bar_width * single_width ,label=Convert_to_Label(key,2))
             i += 1
          
         ax.set_xticks(np.arange(len(Dictionary[k])))
         
         if type(YAxisTicks) is np.ndarray:
             ax.set_yticks(YAxisTicks) 
-                
-        ax.set_xticklabels(list(sorted(Dictionary[k])),rotation='vertical',fontsize=PlotLabelSize)
+        
+        #ax.set_xticklabels(ListofLabels,rotation='vertical',fontsize=PlotLabelSize)
+        ax.set_xticklabels(list(Dictionary[k]),rotation='vertical',fontsize=PlotLabelSize)
         ax.tick_params(axis='y', labelsize=PlotLabelSize)
-        ax.legend()
+        ax.legend(fontsize=PlotLabelSize)
         return ax
 
-def FeaturePermutationComparisonPlot(DictCases, PlotTitle='', YLabel ='', YAxisTicks = None):
-    fig, axes = plt.subplots(nrows = 1, ncols = 3 , figsize=(40 * 3, 40))
+def FeaturePermutationComparisonPlot(DictCases, PlotTitle='', YLabel ='', YAxisTicks = None, Max_No_of_Labels=None):
+    """
+    This will generate the plots for the three mass case types "neutral", "compact" and "seperated".   
+    The dictionary must be of the form {"Smuon_Mass_{}_Nuetralino_{}" : {"Test" : Value, ...}, ...}, this will let the function split the mass cases in the three mass types. 
+    The "Test" values will be used for the x-axis ticks and the Value will be used to plot the bar graphs. Value can be of type float.
+     
     
+    Parameters
+    ----------
+    DictCases : Dictionary
+        Dictionary containing values to be plotted must of form {"Smuon_Mass_{}_Nuetralino_{}" : {"Test" : Value, ...}, ...}.
+    PlotTitle : String, optional
+        Title for the plot to be generated, note this is the plot title for the whole plot and not each individual plot. The default is ''.
+    YLabel : String, optional
+        Will provide the label for the Y axis. The default is ''.
+    YAxisTicks : List, optional
+        Numpy array of values to put on the y axis. The default is None.
+    Max_No_of_Labels : Integer, optional
+        Maximum number of ticks on the X-Axis. This will show only the labels with the largest values accosiated to them for all the mass cases. The default is None.
+
+    Returns
+    -------
+    Plot of the mass comparisons for the three types of mass cases.
+
+    """
+    fig, axes = plt.subplots(nrows = 1, ncols = 3 , figsize=(40 * 3, 40))
+    if Max_No_of_Labels is not None:
+        try: 
+            val = int(Max_No_of_Labels)
+        except ValueError:
+            print("Max_No_of_Labels must be of type int")
+    
+    CompactCase = list()
+    MediumCase = list()
+    SeperatedCases = list()
+    InnerKeys = list(DictCases.keys())   
+    for items in InnerKeys:
+        Neutralino = int(items[(items.rindex('_')+1):])
+        Smuon = int(items[(items.rindex('Mass_')+5):(items.rindex('Mass_')+8)])
+        if Smuon/Neutralino <=1.2:
+            CompactCase.append([Smuon,Neutralino])
+        elif Smuon/Neutralino > 1.2 and Smuon/Neutralino <= 3:
+            MediumCase.append([Smuon,Neutralino])
+        else:
+            SeperatedCases.append([Smuon,Neutralino])
+            
     for i in range(3):
                  
         if i == 0:
-            SMUONMASS = [360, 320]
-            NEUTRALINOMASS = [270, 220]
+            SMUONMASS = [k[0] for k in CompactCase]
+            NEUTRALINOMASS = [k[1] for k in CompactCase]
         elif i == 1:
-            SMUONMASS = [290, 240, 240, 420, 450, 500, 400]
-            NEUTRALINOMASS = [190, 140, 130, 140, 200, 190, 180]
+            SMUONMASS = [k[0] for k in MediumCase]
+            NEUTRALINOMASS = [k[1] for k in MediumCase]
         elif i == 2:
-            SMUONMASS= [500, 400, 510, 200, 210, 250]
-            NEUTRALINOMASS= [95, 80, 60, 60, 65, 55]
+            SMUONMASS = [k[0] for k in SeperatedCases]
+            NEUTRALINOMASS = [k[1] for k in SeperatedCases]
             
         TempDict = dict()
         for k in range(len(SMUONMASS)):
             try:
-                TempDict['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])] = DictCases['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])]
+                TempDict['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])] = DictCases['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])]
             except:
-                TempDict['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])] = DictCases['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])]
-        FeatureAxesPlot(TempDict, ax=axes[i], YAxisTicks=YAxisTicks)
-        axes[i].legend()
-       
+                TempDict['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])] = DictCases['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])]
+        try:
+            FeatureAxesPlot(TempDict, ax=axes[i], YAxisTicks=YAxisTicks,Max_No_of_Labels=Max_No_of_Labels)
+            #axes[i].legend(fontsize=PlotLabelSize)
+            axes[i].legend(fontsize=PlotLabelSize,mode='expand',ncol=3)
+        except ZeroDivisionError:
+            print('Dictionary of length zero given to plotting function.')
     axes[0].set_title('Compact case',fontsize = PlotTitleSize)
-    axes[1].set_title('Medium compact case',fontsize = PlotTitleSize)
-    axes[2].set_title('Split case',fontsize = PlotTitleSize)
+    axes[1].set_title('Neutral case',fontsize = PlotTitleSize)
+    axes[2].set_title('Seperated case',fontsize = PlotTitleSize)
     axes[0].set_ylabel(YLabel, fontsize =  PlotLabelSize)
     
     fig.suptitle(PlotTitle,fontsize=PlotTitleSize)
@@ -181,67 +272,190 @@ def FeaturePermutationComparisonPlot(DictCases, PlotTitle='', YLabel ='', YAxisT
         
     
 def RenameDataBaseColumns(DataSet):
-    Key = { 'PRI_nleps' : r'$N_{\ell}$',
-           'PRI_jets' : r'$N_{jets}$',
-           'PRI_leading_jet_pt' : r'$jet_{PT}^{(1)}$',
-           'PRI_subleading_jet_pt' : r'$jet_{PT}^{(2)}$',
-           'PRI_leading_jet_eta' : r'$jet_{\eta}^{(1)}$',
-           'PRI_subleading_jet_eta' : r'$jet_{\eta}^{(2)}$',
-           'PRI_lep_leading_pt' : r'$\ell_{PT}^{(1)}$',
-           'PRI_lep_subleading_pt' : r'$\ell_{PT}^{(2)}$',
-           'PRI_lep_leading_eta' : r'$\ell_{\eta}^{(1)}$',
-           'PRI_lep_subleading_eta' : r'$\ell_{\eta}^{(2)}$',
-           'PRI_lep_leading_phi' : r'$\ell_{\phi}^{(1)}$',
-           'PRI_lep_subleading_phi' : r'$\ell_{\phi}^{(2)}$',
-           'DER_P_T_ratio_lep_pair' : r'$\frac{\ell_{PT}^{(1)}}{\ell_{PT}^{(2)}}$',
-           'DER_Diff_Eta_lep_pair' : r'$abs(\ell_{\eta}^{(1)} - \ell_{\eta}^{(2)})$',
-           'DER_Diff_Phi_lep_pair' : r'$abs(\ell_{\phi}^{(1)} - \ell_{\phi}^{(2)})$',
-           'DER_sum_P_T' : r'$\sum(PT)$',
-           'PRI_Missing_pt' : r'MissingPT',
-           'DER_PT_leading_lepton_ratio_PT_leading_jet' : r'$\frac{\ell_{PT}^{(1)}}{jet_{PT}^{(1)}}$',
-           'DER_PT_leading_lept_ratio_HT' : r'$\frac{\ell_{PT}^{(1)}}{HT}$',
-           'DER_ST_ratio_PT_Leading_jet' : r'$\frac{ST}{jet_{PT}^{(1)}}$',
-           'DER_ST_ratio_HT' : r'$\frac{ST}{HT}$',
-           'DER_PT_subleading_lepton_ratio_PT_leading_jet' : r'$\frac{\ell_{PT}^{(2)}}{jet_{PT}^{(1)}}$',
-           'DER_PT_subleading_lepton_ratio_HT' : r'$\frac{\ell_{PT}^{(2)}}{HT}$'   }
+    """
+    Function for converting the column headings in the database to Latex style labels for easier reading in the plots
+
+    Parameters
+    ----------
+    DataSet : Pandas database
+        Database to be converted.
+
+    Returns
+    -------
+    Is done in place.
+
+    """
+    Key = { 'PRI_nleps' : r'$n_{\ell}$',
+           'PRI_jets' : r'$n_{j}$',
+           'PRI_leading_jet_pt' : r'$p_T^{j_1}$', # $jet_{PT}^{(1)}$',
+           'PRI_subleading_jet_pt' : r'$p_T^{j_2}$', # $jet_{PT}^{(2)}$',
+           'PRI_leading_jet_eta' : r'$\eta^{j_1}$', # $jet_{\eta}^{(1)}$',
+           'PRI_subleading_jet_eta' : r'$\eta^{j_2}$', # $jet_{\eta}^{(2)}$',
+           'PRI_lep_leading_pt' : r'$p_T^{\ell_1}$', # $\ell_{PT}^{(1)}$',
+           'PRI_lep_subleading_pt' : r'$p_T^{\ell_2}$', # $\ell_{PT}^{(2)}$',
+           'PRI_lep_leading_eta' : r'$\eta^{\ell_1}$', # $\ell_{\eta}^{(1)}$',
+           'PRI_lep_subleading_eta' : r'$\eta^{\ell_2}$', # $\ell_{\eta}^{(2)}$',
+           'PRI_lep_leading_phi' : r'$\phi^{\ell_1}$', # $\ell_{\phi}^{(1)}$',
+           'PRI_lep_subleading_phi' : r'$\phi^{\ell_2}$', # $\ell_{\phi}^{(2)}$',
+           'DER_P_T_ratio_lep_pair' : r'$p_T^{\ell_1}/p_T^{\ell_2}$', # $\frac{\ell_{PT}^{(1)}}{\ell_{PT}^{(2)}}$',
+           'DER_Diff_Eta_lep_pair' : r'$|\Delta \eta(\ell_1,\ell_2)|$', # $abs(\ell_{\eta}^{(1)} - \ell_{\eta}^{(2)})$',
+           'DER_Diff_Phi_lep_pair' : r'$|\Delta \phi(\ell_1,\ell_2)|$', # $abs(\ell_{\phi}^{(1)} - \ell_{\phi}^{(2)})$',
+           'DER_sum_P_T' : r'$\Sigma(p_T)$',
+           'PRI_Missing_pt' : r'$Miss.~p_T$',
+           'HT' : r'$H_T$',
+           'ST' : r'$S_T$',
+           'DER_PT_leading_lepton_ratio_PT_leading_jet' : r'$p_T^{\ell_1}/p_T^{j_1}$', # $\frac{\ell_{PT}^{(1)}}{jet_{PT}^{(1)}}$',
+           'DER_PT_leading_lept_ratio_HT' : r'$p_T^{\ell_1}/H_T$', # $\frac{\ell_{PT}^{(1)}}{HT}$',
+           'DER_ST_ratio_PT_Leading_jet' : r'$S_T/p_T^{j_1}$', # $\frac{ST}{jet_{PT}^{(1)}}$',
+           'DER_ST_ratio_HT' : r'$S_T/H_T$', # $\frac{ST}{HT}$',
+           'DER_PT_subleading_lepton_ratio_PT_leading_jet' : r'$p_T^{\ell_2}/p_T^{j_1}$', # $\frac{\ell_{PT}^{(2)}}{jet_{PT}^{(1)}}$',
+           'DER_PT_subleading_lepton_ratio_HT' : r'$p_T^{\ell_2}/H_T$',  # $\frac{\ell_{PT}^{(2)}}{HT}$’ }
+           'PRI_nMuons' : r'$n_{\mu}$', #Number of Muons
+           'PRI_Muon_leading_pt' : r'$p_T^{\mu_1}$', 
+           'PRI_Muon_subleading_pt' : r'$p_T^{\mu_2}$',
+           'PRI_Muon_leading_eta' : r'$\eta^{\mu_1}$',
+           'PRI_Muon_subleading_eta' : r'$\eta^{\mu_2}$',
+           'PRI_Muon_leading_phi' : r'$\phi^{\mu_1}$',
+           'PRI_Muon_subleading_phi' : r'$\phi^{\mu_2}$',
+           'DER_Muon_invariant_mass' : r'$M_{T}^{\mu}$',
+           'DER_MT2_variable' : r'$M_{T^{2}}$'}
     
     DataSet.rename(columns=Key, inplace=True)
-
-
+    
 def SaveDictionary(FileName,DictionaryToSave):
+    """
+    Saves a JSON dictionary in the location FileName.
+
+    Parameters
+    ----------
+    FileName : String
+        Location and name of the file to be saved.
+    DictionaryToSave : Dictionary
+        The dictionary that should be saved.
+
+    Returns
+    -------
+    None.
+
+    """
     with open(FileName, "w") as myFile:
         json.dump(DictionaryToSave, myFile)
         
 def RetrieveDictionary(FileLocation):
+    """
+    Retrieves a JSON file to be stored as a dictionary.
+
+    Parameters
+    ----------
+    FileLocation : Sring
+        Path to the file.
+
+    Returns
+    -------
+    Dictionary
+        Dictionary converted from the JSON file.
+
+    """
     with open(FileLocation, "r") as myFile:
         return json.load(myFile)
 
-def test():
-    NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
-    SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200]
+    
+def runComparison(SMuon_Neutralino,Saved_Results_Path):
+    """
+    Trains the model on the provided database and then compares the model to the other mass cases to determine the generalisablity of the model.
+    Saves the results of the comparison in a JSON file called Smuon_Mass_{}_Neutralino_{}_Scores.format(Smuon,Neutralino)
+    
+    Parameters
+    ----------
+    SMuon_Neutralino : Tuple of the form [Smuon mass, Neutralino mass]
+        Smuon Neutralino mass case that we want to train on.
+
+    Returns
+    -------
+    String
+        String of the name of the saved dictionary.
+
+    """
+    SMuon, Neutralino, UseF1Score, ResultsLocation = SMuon_Neutralino
+    DictReturn = dict()
+    BackGroundData=pd.read_csv(os.path.join(CSVLOCATION,BACKGROUNDEVENTPATH))
+    BackGroundData.drop('EventID',axis=1,inplace=True)    
+    BackGroundDataTest=pd.read_csv(os.path.join(CSVLOCATION,TESTBACKGROUNDEVENTPATH))
+    BackGroundDataTest.drop('EventID',axis=1,inplace=True)   
+        
+    SignalEvents = pd.read_csv(os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMuon,Neutralino)))
+    SignalEvents.drop(['EventID'],axis=1,inplace=True)  
+        
+    DataSet = pd.concat([BackGroundData,SignalEvents])
+    DataSet.sample(frac=1)
+            
+    DataSet = DataCuts(DataSet)
+            
+    RenameDataBaseColumns(DataSet)
+            
+    JSONParameters = RetrieveDictionary(HYPERPARAMETERLOCATION)
+    try:
+        paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]
+    except:
+        paramList = {'subsample': 1,
+                     'reg_gamma': 0.4,
+                     'reg_alpha': 0.1,
+                     'n_estimators': 200,
+                     'min_split_loss': 2,
+                     'min_child_weight': 5,
+                     'max_depth': 5,
+                     'learning_rate': 0.1}
+        
+        
+    XGBModel = TreeModel(DataSet,paramList = paramList,ApplyDataCut=False) 
+            
+    XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
+    
+    NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96, 175, 87, 125, 100, 70, 100, 68, 120, 150, 75, 300, 500, 440, 260]
+    SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200, 350, 350, 375, 260, 350, 300, 275, 475, 300, 450, 310, 510, 450, 275]
+        
+    Results = dict()
+        
+    for k in range(len(SMUONMASS)):
+            SignalEvents = pd.read_csv(os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[k],NEUTRALINOMASS[k])))
+            SignalEvents.drop(['EventID'],axis=1,inplace=True)  
+            
+            DataSet = pd.concat([BackGroundDataTest,SignalEvents])
+            DataSet.sample(frac=1)
+    
+            DataSet = DataCuts(DataSet)
+    
+            RenameDataBaseColumns(DataSet)
+        
+            F1Score = XGBModel.ModelPredictions(DataSet, Metric='f1')
+            AUCScores = XGBModel.ModelPredictions(DataSet, Metric='auc')
+            SigWeight = DataSet.Events_weight[DataSet.Label == 1].sum()
+            Results['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])] = {'AMS Score' :XGBModel.AMSScore(DataSet),
+                                                                                'F1 Score' : F1Score,
+                                                                                'auc Score' : AUCScores,
+                                                                                'Signal Weight' : SigWeight}
+    DictReturn['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]=Results
+    FileName = 'Smuon_Mass_{}_Neutralino_{}_Scores.json'.format(SMuon,Neutralino)
+    Path = os.path.join(ResultsLocation,Score_Results)
+    SaveDictionary(os.path.join(Path,FileName),DictReturn)  
+    return 'Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)
+
+def SHAP_Perm_Test(ResultsLocation):
     
     MeanSHAPValues = dict()
     MeanPermValues = dict()
     
-    BackGroundData=pd.read_csv(r'I:\CSV\Background_Events\EventData.csv')
+    BackGroundData=pd.read_csv(os.path.join(CSVLOCATION,BACKGROUNDEVENTPATH))
     BackGroundData.drop('EventID',axis=1,inplace=True)    
    
     for i in range(len(NEUTRALINOMASS)):
-        Path = 'I:\CSV\Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i])
+        Path = os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i]))
         SignalEvents = pd.read_csv(Path)
         
         SignalEvents.drop(['EventID'],axis=1,inplace=True)  
         
         DataSet = pd.concat([BackGroundData,SignalEvents])
-        DataSet.sample(frac=1) 
-        #DataSet.drop(['DER_PT_leading_lepton_ratio_PT_leading_jet', 
-        #                 'DER_PT_leading_lept_ratio_HT', 
-        #                 'DER_ST_ratio_PT_Leading_jet', 
-        #                 'DER_ST_ratio_HT', 
-        #                 'DER_PT_subleading_lepton_ratio_PT_leading_jet', 
-        #                 'DER_PT_subleading_lepton_ratio_HT'],axis=1,inplace=True)
-       
-        #DataSet.drop(['HT','ST'],axis=1,inplace=True)
+        DataSet.sample(frac=1)
         
         paramList = {'subsample': 1,
                      'reg_gamma': 0.4,
@@ -252,95 +466,21 @@ def test():
                      'max_depth': 5,
                      'learning_rate': 0.1}
         
-        MeanSHAPValues['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])], MeanPermValues['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = Pipeline(DataSet, paramList = paramList,Plot_titles='Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i]))
+        MeanSHAPValues['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])], MeanPermValues['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = Pipeline(DataSet, paramList = paramList,Plot_titles='Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i]))
     
     
-    SaveDictionary("I:\Results For Particle Physics\Feature Dictionaries\MeanSHAPValues_No_ratios.txt",MeanSHAPValues)
+    SaveDictionary(os.path.join(ResultsLocation,'Feature Dictionaries\MeanSHAPValues_No_ratios.txt'),MeanSHAPValues)
     
-    SaveDictionary("I:\Results For Particle Physics\Feature Dictionaries\MeanPermValues_No_ratios.txt",MeanPermValues)
+    SaveDictionary(os.path.join(ResultsLocation,'Feature Dictionaries\MeanPermValues_No_ratios.txt'),MeanPermValues)
 
-class MultiThreadModelComparison():
-    def __init__(self,SMuonForModel,NeutralinoForModel,UseF1Score=False):
-        BackGroundData=pd.read_csv(r'I:\CSV\Background_Events\EventData.csv')
-        BackGroundData.drop('EventID',axis=1,inplace=True)    
-        self.BackGroundDataTest=pd.read_csv(r'I:\CSV\Background_Events_test\EventData.csv')
-        self.BackGroundDataTest.drop('EventID',axis=1,inplace=True)   
-        
-        SignalEvents = pd.read_csv('I:\CSV\Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}\EventData.csv'.format(SMuonForModel,NeutralinoForModel))
-        SignalEvents.drop(['EventID'],axis=1,inplace=True)  
-        
-        DataSet = pd.concat([BackGroundData,SignalEvents])
-        DataSet.sample(frac=1)
-        
-        DataSet = DataCuts(DataSet)
-        
-        RenameDataBaseColumns(DataSet)
-        
-        JSONParameters = RetrieveDictionary(r'I:\CSV\HyperparameterDictionary.json')
-        paramList = JSONParameters['Smuon_Mass_{}_Neatralino_{}'.format(SMuonForModel,NeutralinoForModel)]
-        
-        self.Results=dict()
-        
-        self.TrainModel(DataSet,paramList,UseF1Score)
-     
-   
-    def TrainModel(self,DataSet,paramList,UseF1Score):
-        self.XGBModel = TreeModel(DataSet,paramList = paramList,ApplyDataCut=False) 
-        
-        self.XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
-        
-          
-        
-    def MultiThreadTest(self,SMuon_Neutralino):
-        
-        SMuon, Neutralino = SMuon_Neutralino
-        
-        
-        SignalEvents = pd.read_csv('I:\CSV\Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}\EventData.csv'.format(SMuon,Neutralino))
-        SignalEvents.drop(['EventID'],axis=1,inplace=True)  
-            
-        DataSet = pd.concat([self.BackGroundDataTest,SignalEvents])
-        DataSet.sample(frac=1)
-    
-        DataSet = DataCuts(DataSet)
-    
-        RenameDataBaseColumns(DataSet)
-        
-        F1Score = self.XGBModel.ModelPredictions(DataSet, Metric='f1')
-        AUCScores = self.XGBModel.ModelPredictions(DataSet, Metric='auc')
-        SigWeight = DataSet.Events_weight[DataSet.Label == 1].sum()
-        self.Results['Smuon_Mass_{}_Neatralino_{}'.format(SMuon,Neutralino)] = {'AMS Score' :self.XGBModel.AMSScore(DataSet),
-                                                                                              'F1 Score' : F1Score,
-                                                                                              'auc Score' : AUCScores,
-                                                                                              'Signal Weight' : SigWeight}
-
-#def runAllComparisons(UseF1Score=False):
-
-if __name__ == '__main__':
-    UseF1Score=True             
-    DictReturn = dict()    
-    for i in tqdm(range(len(SMUONMASS))):
-        TestCase = MultiThreadModelComparison(SMUONMASS[i],NEUTRALINOMASS[i],UseF1Score)
-        
-        ZippedEvents = zip(SMUONMASS,NEUTRALINOMASS)
-        
-        #with Pool(NoofCPU) as pool:
-        #    pool.imap(TestCase.MultiThreadTest,[Event for Event in ZippedEvents])
-        #
-        #pool.close()
-        #pool.join() 
-         
-        for Events in ZippedEvents:
-            TestCase.MultiThreadTest(Events)
-        print(TestCase.Results)
-        DictReturn['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])]=TestCase.Results
-        SaveDictionary(r'I:\Results For Particle Physics\AMS_AUC_Scores.json',DictReturn)    
-   
-    
-def CompareModelwithandwithoutratios(DataSet):
+def CompareModelwithandwithoutratios(DataSet,UseF1Score=False):
     #### Train model
     
-    paramList = {'subsample': 1,
+    JSONParameters = RetrieveDictionary(HYPERPARAMETERLOCATION)
+    try:
+        paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]
+    except:
+        paramList = {'subsample': 1,
                      'reg_gamma': 0.4,
                      'reg_alpha': 0.1,
                      'n_estimators': 200,
@@ -349,15 +489,36 @@ def CompareModelwithandwithoutratios(DataSet):
                      'max_depth': 5,
                      'learning_rate': 0.1}
         
+    paramList = {'subsample': 1,
+                     'reg_gamma': 0.4,
+                     'reg_alpha': 0.1,
+                     'n_estimators': 200,
+                     'min_split_loss': 2,
+                     'min_child_weight': 5,
+                     'max_depth': 5,
+                     'learning_rate': 0.1}    
     DataSet = DataCuts(DataSet)
           
     XGBModel = TreeModel(DataSet,ApplyDataCut=False,  paramList=paramList) 
     
-    XGBModel.XGBoostTrain()
+    XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
+    #if UseF1Score:
+    #    PermList = XGBModel.FeaturePermutation(usePredict_poba=False,scoreFunction='F1',Plot_Title='Test')
+    #else:
+    #    PermList = XGBModel.FeaturePermutation(usePredict_poba=False,scoreFunction='AUC',Plot_Title='Test')
+
+    #RemoveList = [ PermList[i][-1] for i in range(len(PermList)) ]
+    #NewDataSet = DataSet.copy()
+    #NewDataSet.drop(RemoveList[9:],axis=1,inplace=True)
+    #XGBModel = TreeModel(NewDataSet,paramList = paramList,ApplyDataCut=False)
+    #XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
     
     AMSScore = dict()
-    
-    AMSScore['All_features'] = XGBModel.AMSScore(DataSet) 
+    Score = XGBModel.AMSScore(DataSet,Threshold=0.99)
+    if Score == 0: 
+        AMSScore['All_features'] = XGBModel.AMSScore(XGBModel.TestingData,Threshold=0.9)
+    else:
+        AMSScore['All_features'] = Score
     
     ### No HT
     
@@ -365,9 +526,27 @@ def CompareModelwithandwithoutratios(DataSet):
     
     XGBModel = TreeModel(DataSet2,ApplyDataCut=False,  paramList=paramList) 
     
-    XGBModel.XGBoostTrain()
+    XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
     
-    AMSScore['NO_HT'] = XGBModel.AMSScore(DataSet2)
+    #if UseF1Score:
+    #    PermList = XGBModel.FeaturePermutation(usePredict_poba=False,scoreFunction='F1',Plot_Title='Test')
+    #else:
+    #    PermList = XGBModel.FeaturePermutation(usePredict_poba=False,scoreFunction='AUC',Plot_Title='Test')
+
+    #RemoveList = [ PermList[i][-1] for i in range(len(PermList)) ]
+    #NewDataSet = DataSet2.copy()
+    #if len(NewDataSet.columns) > 9:
+    #    NewDataSet.drop(RemoveList[9:],axis=1,inplace=True)
+    
+    #XGBModel = TreeModel(NewDataSet,paramList = paramList,ApplyDataCut=False)
+    #XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
+    
+    
+    Score = XGBModel.AMSScore(DataSet2,Threshold=0.99)
+    if Score == 0: 
+        AMSScore['NO_HT'] = XGBModel.AMSScore(XGBModel.TestingData,Threshold=0.9)
+    else:
+        AMSScore['NO_HT'] = Score
     
     ### Noratios
      
@@ -380,16 +559,392 @@ def CompareModelwithandwithoutratios(DataSet):
     
     XGBModel = TreeModel(DataSet2,ApplyDataCut=False,  paramList=paramList) 
     
-    XGBModel.XGBoostTrain()
-    #XGBModel.XGBoostTrain(UseF1Score=True)
+    XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
+    #if UseF1Score:
+    #    PermList = XGBModel.FeaturePermutation(usePredict_poba=False,scoreFunction='F1',Plot_Title='Test')
+    #else:
+    #    PermList = XGBModel.FeaturePermutation(usePredict_poba=False,scoreFunction='AUC',Plot_Title='Test')
+
+    #RemoveList = [ PermList[i][-1] for i in range(len(PermList)) ]
+    #NewDataSet = DataSet2.copy()
+    #if len(NewDataSet.columns) > 9:
+    #    NewDataSet.drop(RemoveList[9:],axis=1,inplace=True)
     
-    AMSScore['NO_ratio'] = XGBModel.AMSScore(DataSet2)   
+    #XGBModel = TreeModel(NewDataSet,paramList = paramList,ApplyDataCut=False)
+    #XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
+    
+    Score = XGBModel.AMSScore(DataSet2,Threshold=0.99)
+    if Score == 0: 
+        AMSScore['NO_ratio'] = XGBModel.AMSScore(XGBModel.TestingData,Threshold=0.9)
+    else:
+        AMSScore['NO_ratio'] = Score
     
     
     return AMSScore
 
+########### Functions called by the main execusion
+def PCA_Plotter():
+     AllDataSets = input("Do you want to look at the PCA plots for all of the mass cases? y/n ")
+    
+     if AllDataSets == 'y':
+         BackGroundData=pd.read_csv(os.path.join(CSVLOCATION,BACKGROUNDEVENTPATH))
+         BackGroundData.drop('EventID',axis=1,inplace=True)    
+   
+         for i in range(len(NEUTRALINOMASS)):
+            Path = os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i]))
+            SignalEvents = pd.read_csv(Path)
+
+        
+            SignalEvents.drop(['EventID'],axis=1,inplace=True)  
+        
+            DataSet = pd.concat([BackGroundData,SignalEvents])
+            DataSet.sample(frac=1)
+
+            DataSet = DataCuts(DataSet)           
+         
+            RenameDataBaseColumns(DataSet)
+         
+            PCAPlots = PCAPlotter(DataSet,'Label', DataSet.columns)
+            PCAPlots.PCAAnalysis()
+         
+     elif AllDataSets == 'n':
+         InputsValid = False
+         while InputsValid == False:
+             try:
+                 SmuonMass = int(input('Input the mass of the Smuon you want to investigate.'))
+                 NeutralinoMass = int(input('Input the mass of the Neutralino you want to investigate.'))
+                 InputValid = True
+             except:
+                print("Inputs must be of type int.")
+        
+         BackGroundData=pd.read_csv(os.path.join(CSVLOCATION,BACKGROUNDEVENTPATH))
+         BackGroundData.drop('EventID',axis=1,inplace=True)    
+         try:
+             Path = os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMuonMass,NeutralinoMass))
+             SignalEvents = pd.read_csv(Path)
+
+         except: 
+             print("Unable to locate Signal file.")
+             raise FileNotFoundError
+        
+         SignalEvents.drop(['EventID'],axis=1,inplace=True)  
+        
+         DataSet = pd.concat([BackGroundData,SignalEvents])
+         DataSet.sample(frac=1)
+
+         DataSet = DataCuts(DataSet)           
+         
+         RenameDataBaseColumns(DataSet)
+         
+         PCAPlots = PCAPlotter(DataSet,'Label', DataSet.columns)
+         PCAPlots.PCAAnalysis()
+            
+             
+             
+     else:
+         print('Input is not valid. Please enter either "y" or "n".')
+         PCA_Plotter()
+         
+def Run_SHAP_PERM_TEST(DataSet, UseF1, paramList = None,Plot_titles=None):
+       
+    
+    XGBModel = TreeModel(DataSet,ApplyDataCut=False, paramList=paramList) 
+        
+    XGBModel.XGBoostTrain(UseF1Score=UseF1)
+    MeanSHAPValues = XGBModel.SHAPValuePlots(Plot_titles)
+    
+    
+    MeanPermValues = XGBModel.FeaturePermutation(usePredict_poba=False,Plot_Title=Plot_titles)
+    
+    return MeanSHAPValues, MeanPermValues
+    
+    
+def SHAP_Perm_Test(Save_directory,UseF1):
+    """
+    SHAP Permutation test
+
+    Returns
+    -------
+    None.
+
+    """
+
+    
+    MeanSHAPValues = dict()
+    MeanPermValues = dict()
+    
+    BackGroundData=pd.read_csv(os.path.join(CSVLOCATION,BACKGROUNDEVENTPATH))
+    BackGroundData.drop('EventID',axis=1,inplace=True)    
+   
+    for i in range(len(NEUTRALINOMASS)):
+        Path = os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i]))
+        SignalEvents = pd.read_csv(Path)
+        
+        SignalEvents.drop(['EventID'],axis=1,inplace=True)  
+        
+        DataSet = pd.concat([BackGroundData,SignalEvents])
+        DataSet.sample(frac=1) 
+        
+        JSONParameters = RetrieveDictionary(HYPERPARAMETERLOCATION)
+        try:
+            paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]
+        except:
+            paramList = {'subsample': 1,
+                     'reg_gamma': 0.4,
+                     'reg_alpha': 0.1,
+                     'n_estimators': 200,
+                     'min_split_loss': 2,
+                     'min_child_weight': 5,
+                     'max_depth': 5,
+                     'learning_rate': 0.1}
+        
+        MeanSHAPValues['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])], MeanPermValues['Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = Run_SHAP_PERM_TEST(DataSet, UseF1, paramList = paramList,Plot_titles='Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i]))
+    
+    
+    SaveDictionary(os.path.join(Save_directory,'Feature Dictionaries\MeanSHAPValues_No_ratios.txt'),MeanSHAPValues)
+    
+    SaveDictionary(os.path.join(Save_directory,'Feature Dictionaries\MeanPermValues_No_ratios.txt'),MeanPermValues)
+
+def GeneralisabilityTest(ResultsLocation,UseF1):
+    StopRun=False
+
+    for i in range(len(SMUONMASS)):
+        try:
+            DataSet = pd.read_csv(os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i])))
+        except:
+            print('Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{} is missing.'.format(SMUONMASS[i],NEUTRALINOMASS[i]))
+            StopRun=True
+            
+    if StopRun:
+        print('Files missing stopping the run')
+        os.stop()
+    UseF1 = [UseF1] * len(SMUONMASS)   
+    ResultsLocation = [ResultsLocation] * len(SMUONMASS)
+    ZippedData = zip(SMUONMASS,NEUTRALINOMASS, UseF1, ResultsLocation)
+    with Pool(NoofCPU) as pool:
+         r = list(tqdm(pool.imap(runComparison,[Event for Event in ZippedData]),total=len(SMUONMASS)))
+    
+    pool.close()
+    pool.join()
+    
+    CombinedDict = dict()
+    
+    print('Combining dictionary results')
+    
+    for i in tqdm(range(len(SMUONMASS))):
+        FileName = 'Smuon_Mass_{}_Neutralino_{}_Scores.json'.format(SMUONMASS[i],NEUTRALINOMASS[i])
+        Path = os.path.join(ResultsLocation,'Score_Results')
+        Temp = RetrieveDictionary(os.path.join(Path,FileName))  
+        for keys in Temp.keys():
+            CombinedDict[keys]=Temp[keys]
+    
+    SaveDictionary(os.path.join(ResultsLocation,'Model_Scores.json'),CombinedDict)
+
+def Ratio_Test(UseF1):
+    StopRun=False
+
+    for i in range(len(SMUONMASS)):
+        try:
+            DataSet = pd.read_csv(os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i])))
+        except:
+            print('Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{} is missing.'.format(SMUONMASS[i],NEUTRALINOMASS[i]))
+            StopRun=True
+            
+    if StopRun:
+        print('Files missing stopping the run')
+        os.stop()
+    
+    Results = dict()
+    ComparisonAUC = dict()
+    ComparisonF1 = dict()
+    for i in range(len(SMUONMASS)):
+      BackGroundData=pd.read_csv(os.path.join(CSVLOCATION,BACKGROUNDEVENTPATH))
+      BackGroundData.drop('EventID',axis=1,inplace=True)    
+
+      SignalEvents = pd.read_csv(os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i])))
+      SignalEvents.drop(['EventID'],axis=1,inplace=True)  
+        
+      DataSet = pd.concat([BackGroundData,SignalEvents])
+      DataSet.sample(frac=1)
+      
+      if F1:
+          ComparisonF1['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = CompareModelwithandwithoutratios(DataSet,True)
+      else:
+          ComparisonAUC['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = CompareModelwithandwithoutratios(DataSet,False)
+     
+     
+      DataSet = DataCuts(DataSet)
+                
+      RenameDataBaseColumns(DataSet)
+            
+      JSONParameters = RetrieveDictionary(HYPERPARAMETERLOCATION)
+      try:
+        paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]
+      except:
+        paramList = {'subsample': 1,
+                     'reg_gamma': 0.4,
+                     'reg_alpha': 0.1,
+                     'n_estimators': 200,
+                     'min_split_loss': 2,
+                     'min_child_weight': 5,
+                     'max_depth': 5,
+                     'learning_rate': 0.1}
+        
+        
+      #XGBModel = TreeModel(DataSet,paramList = paramList,ApplyDataCut=False) 
+            
+      #XGBModel.XGBoostTrain(UseF1Score=False)
+      
+           
+      #Temp = XGBModel.FeaturePermutation(usePredict_poba=False)
+      
+      #XGBModel.SHAPValuePlots(Convert_to_Label('Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i]), Style = 1))
+      
+      #print(Results)
+      #Results['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = dict(zip(Temp[:,3],Temp[:,0])) 
+
+      #FeaturePermutationComparisonPlot(Results, PlotTitle='Permutation values for the features in the XGB model', YLabel ='Feature Permutation importance', YAxisTicks = None, Max_No_of_Labels = 10)
+      if F1:
+         FeaturePermutationComparisonPlot(ComparisonF1, PlotTitle='AMS score using the F1 metric', YLabel ='AMS score', YAxisTicks = None)
+      else:
+          FeaturePermutationComparisonPlot(ComparisonAUC, PlotTitle='AMS score using the AUC metric', YLabel ='AMS score', YAxisTicks = None)  
+
+def Permutation_Plot_test(F1 =False):
+    
+    Results = dict()
+
+    for i in range(len(SMUONMASS)):
+      BackGroundData=pd.read_csv(os.path.join(CSVLOCATION,BACKGROUNDEVENTPATH))
+      BackGroundData.drop('EventID',axis=1,inplace=True)    
+
+      SignalEvents = pd.read_csv(os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i])))
+      SignalEvents.drop(['EventID'],axis=1,inplace=True)  
+        
+      DataSet = pd.concat([BackGroundData,SignalEvents])
+      DataSet.sample(frac=1)     
+     
+      DataSet = DataCuts(DataSet)
+                
+      RenameDataBaseColumns(DataSet)
+            
+      JSONParameters = RetrieveDictionary(HYPERPARAMETERLOCATION)
+      try:
+        paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]
+      except:
+        paramList = {'subsample': 1,
+                     'reg_gamma': 0.4,
+                     'reg_alpha': 0.1,
+                     'n_estimators': 200,
+                     'min_split_loss': 2,
+                     'min_child_weight': 5,
+                     'max_depth': 5,
+                     'learning_rate': 0.1}
+        
+        
+      XGBModel = TreeModel(DataSet,paramList = paramList,ApplyDataCut=False) 
+            
+      XGBModel.XGBoostTrain(UseF1Score=False)
+      
+           
+      Temp = XGBModel.FeaturePermutation(usePredict_poba=False)
+      
+      XGBModel.SHAPValuePlots(Convert_to_Label('Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i]), Style = 1))
+      
+      print(Results)
+      Results['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = dict(zip(Temp[:,3],Temp[:,0])) 
+
+      FeaturePermutationComparisonPlot(Results, PlotTitle='Permutation values for the features in the XGB model', YLabel ='Feature Permutation importance', YAxisTicks = None, Max_No_of_Labels = 10)
+
+########### Main execution 
+
+if __name__ == "__main__":
+    print("This script will execute all the processes needed to create all the plots in the paper.")
+    ################TESTS TO RUN##############################
+    Run_PCA_Plotter = True
+    Run_SHAP_and_Permutation_tests = False
+    Run_Generalisability_tests = False
+    Run_ratio_and_HT_ST_comparison_tests = False
+    Run_AUC_F1_AMS_comparison_test = False
+    Run_Feature_Permutation_comparison_test = False
+    ################DIRECTORY FOR RESULTS#####################
+    Directory_for_Results = r'G:\PPLM_results'
+    ##########################################################
+    print('The following tests will be run:')
+    if Run_PCA_Plotter:
+        print('PCA plotter.')
+    if Run_SHAP_and_Permutation_tests:
+        print("A test to determine SHAP and feature permutation values for each of the columns in the dataset.")
+    if Run_Generalisability_tests:
+        print("A test where a model will be created for one mass case and tested against the other mass cases  to determine how generalisable the model is to the other mass cases.")
+    if Run_ratio_and_HT_ST_comparison_tests:
+        print("A test to determine the effect of removing the feature engineered raios and the HT and ST features.")
+    if Run_AUC_F1_AMS_comparison_test:
+        print('Running test showing the AUC, F1 and AMS scores achieved for the diffirent mass cases.')
+    if Run_Feature_Permutation_comparison_test:
+        print("Running test comparing the feature permutation values for the diffirent mass cases.")
+    print('Running tests for the following Smuon Nuetralino mass cases:')
+    print([i for i in zip(SMUONMASS,NEUTRALINOMASS)])
+    if os.path.isdir(Directory_for_Results):
+        print('Results will be saved in {}'.format(Directory_for_Results))
+    else:
+        print('The results directory is not accessible. Script will end excusion.')
+        sys.exit()
+    print('Testing if all files exist.')
+    Test_for_Files()
+    
+    #### Begin functions ############
+    if Run_PCA_Plotter:
+        print('PCA plotter.')
+        PCA_Plotter()
+    if Run_SHAP_and_Permutation_tests:
+        print("A test to determine SHAP and feature permutation values for each of the columns in the dataset.")
+        SHAP_Perm_Test(Save_directory)
+    if Run_Generalisability_tests:
+        print("In this test we train the model using one of the mass cases and then apply the model to the other mass cases to determine the AMS, AUC and F1 scores for that mass case using the trained model.")
+        GeneralisabilityTest()
+        
+    if Run_ratio_and_HT_ST_comparison_tests:
+        print('Run a test to determine the effect that the ratios and that the HT and ST variables hove on the efficiency of the models.')
+        InputCheck = False
+        while InputCheck == False:
+            UseF1Score = input('Do you want to use only the AUC metric the F1 metric or both?F1/AUC/BOTH' )
+            if UseF1Score == 'F1' :
+                Ratio_Test(True)
+                InputCheck = True
+            elif UseF1Score == 'AUC':
+                 RatioTest(False)
+                 InputCheck = True
+            elif UseF1Score == 'BOTH':
+                 RatioTest(True)
+                 RatioTest(False)
+                 InputCheck = True
+            else:
+                print('Unrecognised input. Please type either "AUC", "F1" or "BOTH"')
+                
+        
+    if Run_Feature_Permutation_comparison_test:
+        print("Running test comparing the feature permutation values for the diffirent mass cases.")
+        InputCheck = False
+        while InputCheck == False:
+            UseF1Score = input('Do you want to use only the AUC metric the F1 metric or both?F1/AUC/BOTH' )
+            if UseF1Score == 'F1' :
+                Permutation_Plot_test(True)
+                InputCheck = True
+            elif UseF1Score == 'AUC':
+                 Permutation_Plot_test(False)
+                 InputCheck = True
+            elif UseF1Score == 'BOTH':
+                 Permutation_Plot_test(True)
+                 Permutation_Plot_test(False)
+                 InputCheck = True
+            else:
+                print('Unrecognised input. Please type either "AUC", "F1" or "BOTH"')
+
+    
+
+
 def compareAllCases():
-    BackGroundData=pd.read_csv(r'I:\CSV\Background_Events\EventData.csv')
+    BackGroundData=pd.read_csv(r'G:\CSV\Background_Events\EventData.csv')
     BackGroundData.drop('EventID',axis=1,inplace=True)    
    
     NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96]
@@ -398,13 +953,15 @@ def compareAllCases():
     Results = dict()
     
     for i in range(len(NEUTRALINOMASS)):
-        Path = 'I:\CSV\Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neatralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i])
+        Path = 'G:\CSV\Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i])
         SignalEvents = pd.read_csv(Path)
         SignalEvents.drop(['EventID'],axis=1,inplace=True)  
         
         DataSet = pd.concat([BackGroundData,SignalEvents])
         DataSet.sample(frac=1)
         
-        Results['Smuon_Mass_{}_Neatralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])]=CompareModelwithandwithoutratios(DataSet)
+        Results['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])]=CompareModelwithandwithoutratios(DataSet)
         
-    SaveDictionary('I:\Results For Particle Physics\Feature Dictionaries\AMSScoreResults\AMSScores_AUC_metric_With_weight_resampling.txt',Results)
+    SaveDictionary('G:\Results For Particle Physics\Feature Dictionaries\AMSScoreResults\AMSScores_AUC_metric_With_weight_resampling.txt',Results)
+    
+    

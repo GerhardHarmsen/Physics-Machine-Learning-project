@@ -15,7 +15,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.utils import resample
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
+from sklearn.metrics import confusion_matrix, f1_score, precision_recall_fscore_support
 from scipy.stats import uniform
 import Feature_Plots_PCA
 import shap
@@ -53,16 +53,20 @@ def ConfusionMatrixPlot(ConfusionResults, ListFeatures, ListCoeffs):
     plt.plot(fig)
     plt.show()
     
-def inverse_xgb_f1(y, t, threshold=0.1):
+def inverse_xgb_f1(y, t, threshold=0.5):
     t = t.get_label()
     y_bin = (y > threshold).astype(int) # works for both type(y) == <class 'numpy.ndarray'> and type(y) == <class 'pandas.core.series.Series'>
-    return 'f1',(1 - f1_score(t,y_bin))
+    Recall, Precision, F1, Avg = precision_recall_fscore_support(t, y_bin, beta=0.01, average = 'binary')
+    #return 'f1',(1 - f1_score(t,y_bin))
+    return 'f1',(1-F1)
     
-def xgb_f1(y, t, threshold=0.1):
+def xgb_f1(y, t, threshold=0.5):
     t = t.get_label()
     y_bin = (y > threshold).astype(int) # works for both type(y) == <class 'numpy.ndarray'> and type(y) == <class 'pandas.core.series.Series'>
-    return 'f1',f1_score(t,y_bin)
-
+    Recall, Precision, F1, Avg = precision_recall_fscore_support(t, y_bin, beta=0.01, average = 'binary')
+    #return 'f1',f1_score(t,y_bin)
+    return 'f1', F1
+    
 def LabelClean(DataSet):
     try:
         DataSet.drop(['EventID'],axis=1,inplace=True)
@@ -87,31 +91,99 @@ def RemoveFeaturesNotinPaper(DataSet):
     
 
 
-def DataCuts(DataSet, DisplayRemoval = False):
+def SumReturnDict(DataSet):
+    Signal = sum(DataSet.Events_weight[DataSet.Label == 1])
+    Background = sum(DataSet.Events_weight[DataSet.Label == 0])    
+    return {'Signal' : Signal , 'Background' : Background, 'Ratio' : Signal/np.sqrt(Signal + Background)}
+
+def DataCuts(DataSet, DisplayRemoval = False, SaveResults=False):
     """Function for introducing momentum and pseudorapidity cuts to the data """
+    RemovalDict = dict()
+    InitialWeights = dict()
+    RemovalDict['Initial'] = SumReturnDict(DataSet)
+    ######### Keep only dimuon events
+    InitialWeight = sum(DataSet.Events_weight)
+    DataSet = DataSet[DataSet.PRI_nMuons > 1]
+    
+    print("Initial weight {:.2f}".format(InitialWeight))
+    print("New weight {:.2f}. Cut effciency {:.2f}% for lepton > 0 cut".format(sum(DataSet.Events_weight),(sum(DataSet.Events_weight)/InitialWeight)*100))
+    RemovalDict['Cut l>0'] = SumReturnDict(DataSet)
+    ############# Invariant muon mass cut ################
+    InitialWeight = sum(DataSet.Events_weight)
+    DataSet = DataSet[DataSet.DER_Muon_invariant_mass > 20]
+    
+    print("Initial weight {:.2f}".format(InitialWeight))
+    print("New weight {:.2f}. Cut effciency {:.2f}% for Muon mass > 20 cut".format(sum(DataSet.Events_weight),(sum(DataSet.Events_weight)/InitialWeight)*100))
+    RemovalDict['Cut Muon mass >20'] = SumReturnDict(DataSet)   
+    
+    ############## MT2 cuts ####################
+    InitialWeight = sum(DataSet.Events_weight)
+    DataSet = DataSet[DataSet.DER_MT2_variable > 90]
+    
+    print("Initial weight {:.2f}".format(InitialWeight))
+    print("New weight {:.2f}. Cut effciency {:.2f}% for MT_2 > 90 cut".format(sum(DataSet.Events_weight),(sum(DataSet.Events_weight)/InitialWeight)*100))
+    RemovalDict['Cut l>0'] = SumReturnDict(DataSet)   
+    
     ####Clean the jet signals. To remove any soft jets.###
+    InitialWeight = sum(DataSet.Events_weight)
+    
     DataSet0 = DataSet[DataSet.PRI_jets == 0]
     DataSet1 = DataSet[(DataSet.PRI_jets == 1) & (DataSet.PRI_leading_jet_pt >= 25) & (abs(DataSet.PRI_leading_jet_eta) <= 2.5)]
     DataSet2 = DataSet[(DataSet.PRI_jets >= 2) & (DataSet.PRI_leading_jet_pt >= 25) & (abs(DataSet.PRI_leading_jet_eta) <= 2.5) & (DataSet.PRI_subleading_jet_pt >= 25) & (abs(DataSet.PRI_subleading_jet_eta) <= 2.5)]
-    if DisplayRemoval:
-        print('{} events removed from the dataset as the jets had a momentum lower than 25GeV or the psuedorapidity values of the jets was greater than 2.5.'.format(len(DataSet)-len(pd.concat([DataSet0,DataSet1,DataSet2]))))
     JetDataSet = pd.concat([DataSet0,DataSet1,DataSet2])
     
+    print("Initial weight {:.2f}".format(InitialWeight))
+    print("New weight {:.2f}. Cut effciency {:.2f}% for cut Jet_pt >= 25".format(sum(JetDataSet.Events_weight),(sum(JetDataSet.Events_weight)/InitialWeight)*100))
+
+    
+    RemovalDict['Cut PT(j) >= 25 and ETA(j) <= 2.5'] = SumReturnDict(JetDataSet)
     ### Clean the leptonic signals to remove any soft leptons####
+    InitialWeight = sum(JetDataSet.Events_weight)
+    
     DataSet3 = JetDataSet[JetDataSet.PRI_nleps == 0]
     DataSet4 = JetDataSet[(JetDataSet.PRI_nleps == 1) & (JetDataSet.PRI_lep_leading_pt >= 10) & (abs(JetDataSet.PRI_lep_leading_eta) <= 2.5)]
     DataSet5 = JetDataSet[(JetDataSet.PRI_nleps >= 2) & (JetDataSet.PRI_lep_leading_pt >= 10) & (abs(JetDataSet.PRI_lep_leading_eta) <= 2.5) & (JetDataSet.PRI_lep_subleading_pt >= 10) & (abs(JetDataSet.PRI_lep_subleading_eta) <= 2.5)]
-    if DisplayRemoval:
-        print('{} events removed from the dataset as the leptons had a momentum less than 10GeV, or had a pseudorapidity of greater than 2.5. '.format(len(JetDataSet)-len(pd.concat([DataSet3,DataSet4,DataSet5]))))
     CleanedDataSet = pd.concat([DataSet3,DataSet4,DataSet5])
+
+    print("Initial weight {:.2f}".format(InitialWeight))
+    print("New weight {:.2f}. Cut effciency {:.2f}% for lepton cut >= 10".format(sum(CleanedDataSet.Events_weight),(sum(CleanedDataSet.Events_weight)/InitialWeight)*100))
     
+    RemovalDict['Cut PT(l) >= 10 and ETA(l) <= 2.5'] = SumReturnDict(CleanedDataSet)
+    
+    #CleanedDataSet = CleanedDataSet[CleanedDataSet.HT > 120]
+    
+    #RemovalDict['THT > 120'] = SumReturnDict(CleanedDataSet)
+    
+    #CleanedDataSet = CleanedDataSet[CleanedDataSet.PRI_lep_leading_pt > 50]
+    
+    #RemovalDict['Leading Lepton > 50'] = SumReturnDict(CleanedDataSet)
+    
+    #InitialWeight = sum(CleanedDataSet.Events_weight)
+    
+    #CleanedDataSet = CleanedDataSet[CleanedDataSet.DER_PT_leading_lept_ratio_HT > 0.2]
+    
+    #print("Initial weight {:.2f}".format(InitialWeight))
+    #print("New weight {:.2f}. Cut effciency {:.2f} for cut leading lepton momentum/H_T > 0.2%".format(sum(CleanedDataSet.Events_weight),(sum(CleanedDataSet.Events_weight)/InitialWeight)*100))
+  
+    
+    #RemovalDict['Cut p_T^{l1}/H_T > 1.5'] =  SumReturnDict(CleanedDataSet)
+    
+    #InitialWeight = sum(CleanedDataSet.Events_weight)
+     
+    #CleanedDataSet = CleanedDataSet[CleanedDataSet.DER_PT_leading_lept_ratio_HT > 1]
+ 
+    #print("Initial weight {:.2f}".format(InitialWeight))
+    #print("New weight {:.2f}. Cut effciency {:.2f}% for cut pt^(l1)/H_T > 1.5".format(sum(CleanedDataSet.Events_weight),(sum(CleanedDataSet.Events_weight)/InitialWeight)*100))
+ 
+    #RemovalDict['Cut p_T^{l1}/H_T > 1.5'] =  SumReturnDict(CleanedDataSet)
+    
+
+    ####CleanedDataSet = CleanedDataSet[CleanedDataSet.PRI_lep_leading_pt > 40]
+    
+    ####RemovalDict['PT_lep_leading > 50'] = SumReturnDict(CleanedDataSet)
     #######
     ####### Consider implementing this in a better way #######################
     #######
-    # CleanedDataSet = RemoveFeaturesNotinPaper(CleanedDataSet)
-    ######
-    ###### This function might have to be removed ############################
-    ######
     return CleanedDataSet
     
 class TreeModel():
@@ -120,8 +192,8 @@ class TreeModel():
             DataSet = DataCuts(DataSet)
         #DataSet = RemoveFeaturesNotinPaper(DataSet)
         
-        print ("Orig : total weight sig", DataSet.Events_weight[DataSet.Label == 1].sum())
-        print ("Orig : total weight bkg", DataSet.Events_weight[DataSet.Label == 0].sum())
+        print("Orig : total weight sig", DataSet.Events_weight[DataSet.Label == 1].sum())
+        print("Orig : total weight bkg", DataSet.Events_weight[DataSet.Label == 0].sum())
         try:
             self.df = DataSet.drop(['EventID','Label'],axis=1)
             self.Y = DataSet.Label
@@ -180,6 +252,77 @@ class TreeModel():
         print ("Train : total weight bkg", self.TrainingData.Events_weight[self.TrainingData.Label == 0].sum())           
         
         
+    
+
+    def my_cv(self, df, predictors, response, kfolds, classifier, verbose=False):
+        """Roll our own CV 
+        train each kfold with early stopping
+        return average metric, sd over kfolds, average best round"""
+        EARLY_STOPPING_ROUNDS=100  # stop if no improvement after 100 rounds
+        metrics = []
+        best_iterations = []
+        
+
+        for train_fold, cv_fold in kfolds.split(df): 
+            fold_X_train=df[predictors].values[train_fold]
+            fold_y_train=df[response].values[train_fold]
+            fold_X_test=df[predictors].values[cv_fold]
+            fold_y_test=df[response].values[cv_fold]
+            classifier.fit(fold_X_train, fold_y_train,
+                      early_stopping_rounds=EARLY_STOPPING_ROUNDS,
+                      eval_set=[(fold_X_test, fold_y_test)],
+                      eval_metric=inverse_xgb_f1,
+                      verbose=0,
+                     )
+            y_pred_test=classifier.predict(fold_X_test)
+            y_pred_test = (y_pred_test > 0.5).astype(int)
+            metrics.append(f1_score(fold_y_test,y_pred_test))
+            best_iterations.append(classifier.best_iteration)
+        return np.average(metrics), np.std(metrics), np.average(best_iterations)
+        
+    def cv_over_param_dict(self, df, param_dict, predictors, response, kfolds, verbose=False):
+        """given a list of dictionaries of xgb params
+        run my_cv on params, store result in array
+        return updated param_dict, results dataframe
+        """
+        
+        from datetime import datetime, timedelta
+        
+        BOOST_ROUNDS=50000
+        start_time = datetime.now()
+        print("%-20s %s" % ("Start Time", start_time))
+        
+        results = []
+        
+        for i, d in enumerate(param_dict):
+            model = xgb.XGBClassifier(objective = "binary:logistic",
+                                  n_estimators=BOOST_ROUNDS,
+                                  verbosity=0,
+                                  random_state=2012, 
+                                  n_jobs=-1,
+                                  booster='gbtree',
+                                  eval_metric = inverse_xgb_f1,
+                                  use_label_encoder=False,
+                                  maximize = True,
+                                  **d)
+        
+            metric, metric_std, best_iteration = self.my_cv(df, predictors, response, kfolds, model, verbose=False)    
+            results.append([metric, metric_std, best_iteration, d])
+            if i % 100 == 0:
+                print("%s %3d result mean: %.6f std: %.6f, iter: %.2f" % (datetime.strftime(datetime.now(), "%T"), i, metric, metric_std, best_iteration))
+        
+        end_time = datetime.now()
+        print("%-20s %s" % ("Start Time", start_time))
+        print("%-20s %s" % ("End Time", end_time))
+        print(str(timedelta(seconds=(end_time-start_time).seconds)))
+    
+        results_df = pd.DataFrame(results, columns=['f1_score', 'std', 'best_iter', 'param_dict']).sort_values('f1_score',ascending=False)
+        print(results_df.head())
+    
+        best_params = results_df.iloc[0]['param_dict']
+        return best_params, results_df    
+
+
     def HyperParameterTuning(self, NoofTests = 200, No_jobs = -1):
         """
         Function for selecting the optimum values for the hyperparmeters to use for the XGBoost model.
@@ -198,42 +341,69 @@ class TreeModel():
             
             
         """
-        try:
-        	DataSet = self.TrainingData.sample(n=50000)
-        except:
-        	DataSet = self.TrainingData	
+        from sklearn.model_selection import KFold 
+        from itertools import product
+        RANDOMSTATE = 2012
+        
+        
+        kfolds = KFold(n_splits=10, shuffle=True, random_state=RANDOMSTATE)
+        
+        current_params = {'max_depth': 5,
+                          'colsample_bytree': 0.5,
+                          'colsample_bylevel': 0.5,
+                          'subsample': 0.5,
+                          'learning_rate': 0.01,
+                              }       
+                
+       	
+        df = self.TrainingData.sample(frac=0.5)
+        
+        
+        response = 'Label'
+        predictors = df.drop(['Events_weight','Label'],axis=1).columns
+        
+        ##################################################
+        # round 1: tune depth
+        ##################################################
+        max_depths = list(range(2,8))
+        grid_search_dicts = [{'max_depth': md} for md in max_depths]
+        # merge into full param dicts
+        full_search_dicts = [{**current_params, **d} for d in grid_search_dicts]
+        
+        # cv and get best params
+        current_params, results_df = self.cv_over_param_dict(df, full_search_dicts, predictors, response, kfolds)
+        
+                
+        ##################################################
+        # round 2: tune subsample, colsample_bytree, colsample_bylevel
+        ##################################################
+        subsamples = np.linspace(0.01, 1.0, 10)
+        colsample_bytrees = np.linspace(0.1, 1.0, 10)
+        colsample_bylevel = np.linspace(0.1, 1.0, 10)
+        # narrower search
+        # subsamples = np.linspace(0.25, 0.75, 11)
+        # colsample_bytrees = np.linspace(0.1, 0.3, 5)
+        # colsample_bylevel = np.linspace(0.1, 0.3, 5)
+        # subsamples = np.linspace(0.4, 0.9, 11)
+        # colsample_bytrees = np.linspace(0.05, 0.25, 5)
+            
+        grid_search_dicts = [dict(zip(['subsample', 'colsample_bytree', 'colsample_bylevel'], [a, b, c])) 
+                             for a,b,c in product(subsamples, colsample_bytrees, colsample_bylevel)]
+        # merge into full param dicts
+        full_search_dicts = [{**current_params, **d} for d in grid_search_dicts]
+        # cv and get best params
+        current_params, results_df = self.cv_over_param_dict(df, full_search_dicts, predictors, response, kfolds)
+        
+        # round 3: learning rate
+        learning_rates = np.logspace(-3, -1, 5)
+        grid_search_dicts = [{'learning_rate': lr} for lr in learning_rates]
+        # merge into full param dicts
+        full_search_dicts = [{**current_params, **d} for d in grid_search_dicts]
 
-        Labels = DataSet.Label
-
-        #SHAP does not for some reason work with the base score feature.
-        param_grid =  { 'learning_rate' : [0.01, 0.1, 0.5, 0.9],
-                       'n_estimators' : [10, 50, 100, 150, 200],
-                       'subsample': [0.3, 0.5, 0.9],
-                       'max_depth': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                       #'base_score' : [0.1, 0.5, 0.9],
-                       'reg_alpha' : [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
-                       'min_split_loss' : [0, 0.5, 0.8, 1, 2],
-                       'reg_gamma' : [0.1, 0.2, 0.3, 0.4, 0.5, 0.6 ],
-                       'min_child_weight' : range(5,8)}
-        #### We are goiing to keep some parameters constant during this test. If you wish to test all parameters delete the below paramgrid.
-        param_grid =  { 'learning_rate' : uniform(loc=0.01, scale=1), ###Uniform creates a distribution of [loc, loc + scale]
-                       'n_estimators' : [200],
-                       'subsample': uniform(loc=0.8,scale=0.2),
-                       'max_depth': list(range(4,11)),
-                       'reg_alpha' : uniform(0,0.6),
-                       'min_split_loss' : [0, 0.5, 0.8, 1, 2, 5],
-                       'min_child_weight' : [5]}
-        model = xgb.XGBClassifier(objective = "binary:logistic", verbosity=1,use_label_encoder=False, eval_metric = 'logloss')
-        randomized_mse = RandomizedSearchCV(estimator = model, 
-                                            param_distributions=param_grid,
-                                            n_iter = NoofTests, scoring='f1', 
-                                            n_jobs =1, cv=4, verbose = 1)
-        randomized_mse.fit(DataSet.drop(['Events_weight','Label'],axis=1), Labels)
-        print('Best parameters found: ', randomized_mse.best_params_)
-        print('Best accuracy found: ', np.sqrt(np.abs(randomized_mse.best_score_)))
-        self.HyperParameterResults = randomized_mse
-        self.HyperParameters = randomized_mse.best_params_
-        return randomized_mse.best_params_
+        # cv and get best params
+        current_params, results_df = self.cv_over_param_dict(df, full_search_dicts, predictors, response, kfolds, verbose=False)
+        
+        self.HyperParameters = current_params
         
               
         
@@ -265,7 +435,7 @@ class TreeModel():
             
         Predictions = [round(value) for value in y_pred]
         X_dev = X_test.copy()
-        for i in range(X_dev.shape[0]):
+        for i in tqdm(range(X_dev.shape[0])):
             if Predictions[i] == 0 and Y_test.iloc[i] == 0:
                Predictions[i] = 'True Negative'
             elif Predictions[i] == 0 and Y_test.iloc[i] == 1:
@@ -277,6 +447,7 @@ class TreeModel():
     
         X_dev['Class'] = Predictions
         
+        print('Predictions complete. Creating heat map plot.')
         try:
             Feature_Plots_PCA.FeaturePlots(X_dev, 'Class')
         except: 
@@ -295,9 +466,9 @@ class TreeModel():
                 Feature_Plots_PCA.FeaturePlots(X_dev.drop(np.unique(DropLabel),axis=1), 'Class')
             except:
                 print('Unable to create pairplot to compare the results of the prediction.')
-        
-        PCAPlots = Feature_Plots_PCA.PCAPlotter(X_dev,'Class')
-        PCAPlots.PCAAnalysis()
+        print('Creating PCA plot.')
+        #PCAPlots = Feature_Plots_PCA.PCAPlotter(X_dev,'Class')
+        #PCAPlots.PCAAnalysis()
             
     def TreeDiagram(self):
         #fig, ax = plt.subplots(figsize=(300, 300))
@@ -332,9 +503,11 @@ class TreeModel():
         dtest = xgb.DMatrix(self.TestingData.drop(['Events_weight','Label'],axis =1),
                             label=self.TestingData.Label,
                             weight=self.TestingData.Events_weight )
-        sum_wpos = sum( self.TrainingData.Events_weight.iloc[i] for i in range(len(self.TrainingData)) if self.TrainingData.Label.iloc[i] == 1.0  )
+        sum_wpos = sum( self.TrainingData.Events_weight.iloc[i] for i in range(len(self.TrainingData)) if self.TrainingData.Label.iloc[i] == 1.0  ) #This was used when the weights were not normalised.
         sum_wneg = sum( self.TrainingData.Events_weight.iloc[i] for i in range(len(self.TrainingData)) if self.TrainingData.Label.iloc[i] == 0.0  )
-        print ('Weight statistics: wpos=%g, wneg=%g, ratio=%g' % ( sum_wpos, sum_wneg, sum_wneg/sum_wpos ))
+        #sum_wpos = len(self.TrainingData[self.TrainingData.Label==1]) 
+        #sum_wneg = len(self.TrainingData[self.TrainingData.Label==0]) 
+        print('Weight statistics: wpos=%g, wneg=%g, ratio=%g' % ( sum_wpos, sum_wneg, sum_wneg/sum_wpos ))
         paramList = self.HyperParameters
         if UseF1Score:
             paramList['disable_default_eval_metric'] = 1
@@ -345,20 +518,20 @@ class TreeModel():
         paramList['tree_method'] ='hist'
         paramList['objective'] = 'binary:logistic'
         watchlist = [(dtrain,'train'), (dtest,'eval')]
-        print ('loading data end, start to boost trees')
-        AdjustWeights = [0,0.001,0.01,0.1,1]
+        print('loading data end, start to boost trees')
+        AdjustWeights = [0.0001,0.001,0.01,0.1,1]
         Results = []
         for i in AdjustWeights:
-            paramList['scale_pos_weight'] = sum_wneg/sum_wpos * i
-            if UseF1Score:
-                self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=100, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False,  maximize = True)
-            else:
-                self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=100, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
-            Results.append(self.Model.best_score)
+           paramList['scale_pos_weight'] = sum_wneg/sum_wpos * i
+           if UseF1Score:
+               self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=100, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False,  maximize = True)
+           else:
+              self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=100, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
+           Results.append(self.Model.best_score)
         print('Weight Adjust complete')
         print('Adjusting the weight by {}'.format(AdjustWeights[Results.index(max(Results))]))
         paramList['scale_pos_weight'] = sum_wneg/sum_wpos * AdjustWeights[Results.index(max(Results))]
-        
+        #paramList['scale_pos_weight'] = sum_wneg/sum_wpos * 0.00001
         if UseF1Score:
             self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= True, maximize = True)
         else:
@@ -367,7 +540,7 @@ class TreeModel():
         
         self.ModelPredictions(self.TestingData)
         self.Model.save_model('XGBoostModelFile')
-        self.TreeDiagram()
+        #self.TreeDiagram()
         #self.ConfusionPairPlot(self.TestingData.drop(['Events_weight','Label'],axis=1), self.TestingData.Label)
         return self.Model
     
@@ -377,17 +550,15 @@ class TreeModel():
         DataSet1 = LabelClean(DataSet1)
         Matrix = xgb.DMatrix(DataSet1.drop('Events_weight',axis=1),label=Y,weight=DataSet.Events_weight)
         y_pred = self.Model.predict(Matrix)
-        predictions = y_pred > 0.5
+        predictions = [(value > 0.5).astype(int) for value in y_pred]
         if Metric == 'accuracy':
             accuracy = accuracy_score(Y, predictions)
             print("Accuracy: %.2f%%" % (accuracy * 100.0))
         elif Metric == 'f1':
             _, accuracy = xgb_f1(predictions, Matrix)
-            print("F1 Score: %.2f%%" % (accuracy)) 
-        elif Metric == 'auc':
-            accuracy = roc_auc_score(Matrix.get_label(), predictions)
+            print("F1 Score: %.2f%%" % (accuracy))            
         
-        GXBoost_confusion = confusion_matrix(Y,predictions,normalize=None)
+        GXBoost_confusion = confusion_matrix(Y,predictions,normalize=None,sample_weight=DataSet1.Events_weight)
         print('{} events misclassified as true with an ams score of {}'.format(GXBoost_confusion[0,1], self.AMSScore(DataSet)))
         
         sns.heatmap(GXBoost_confusion,annot=True)
@@ -398,13 +569,16 @@ class TreeModel():
         
         return accuracy
         
-    def AMSScore(self,DataSet):
+    def AMSScore(self,DataSet,Threshold=0.5):
+        TotalSignal = sum(DataSet.Label)
+        TotalBackground = len(DataSet) - TotalSignal
         DataSet1 = DataSet.copy()
         Y = DataSet1.Label
         DataSet1 = LabelClean(DataSet1)
         dtrain = xgb.DMatrix(DataSet.drop(['Events_weight','Label'],axis=1),Y)
         y_pred = self.Model.predict(dtrain)
-        Predictions = [round(value) for value in y_pred]
+        #Predictions = [round(value) for value in y_pred]
+        Predictions = [(value > Threshold).astype(int) for value in y_pred]
         s = []
         b = []
         for i in range(y_pred.shape[0]):
@@ -414,15 +588,19 @@ class TreeModel():
                b.append(DataSet.Events_weight.iloc[i])
     
         print('Number of correctly classified signal events {}. Number of misclassified background events {}'.format(len(s),len(b)))
-        s = sum(s)
-        b = sum(b)
-        if b<=0 or s<=0:
+        print('Percentage of signal events correctly identified {:.2f}. Number of background events incorrectly identified {:.2f}'.format((len(s)/TotalSignal)*100,(len(b)/TotalBackground)*100))
+        signal = sum(s)
+        background = sum(b)
+        #signal = len(s)
+        #background = len(b)
+        if background<=0 or signal<=0:
                 return 0
         try:
-            return np.sqrt(2*((s+b)*np.log(1+float(s)/b)-s))
+            return signal/np.sqrt(background)
+            #return np.sqrt(2*((signal+background)*np.log(1+float(signal)/background)-signal))
         except ValueError:
-                print (1+float(s)/b)
-                print (2*((s+b)*np.log(1+float(s)/b)-s))
+                print (1+float(signal)/background)
+                print (2*((signal+background)*np.log(1+float(signal)/background)-signal))
             #return s/sqrt(s+b)
     
     def SHAPValuePlots(self,plt_Title=None):
