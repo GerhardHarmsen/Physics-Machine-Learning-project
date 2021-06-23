@@ -15,11 +15,12 @@ from sklearn.metrics import accuracy_score
 from sklearn.utils import resample
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from sklearn.metrics import confusion_matrix, f1_score, precision_recall_fscore_support
+from sklearn.metrics import confusion_matrix, f1_score, precision_recall_fscore_support, roc_auc_score
 from scipy.stats import uniform
 import Feature_Plots_PCA
 import shap
 from PermImportance import PermulationImportance
+import sys
 
 
 def DictionaryPlot(DictList, ChartName):
@@ -117,6 +118,7 @@ def DataCuts(DataSet, DisplayRemoval = False, SaveResults=False):
     RemovalDict['Cut Muon mass >20'] = SumReturnDict(DataSet)   
     
     ############## MT2 cuts ####################
+    DataSet2 = DataSet.copy()
     InitialWeight = sum(DataSet.Events_weight)
     DataSet = DataSet[DataSet.DER_MT2_variable > 90]
     
@@ -124,6 +126,11 @@ def DataCuts(DataSet, DisplayRemoval = False, SaveResults=False):
     print("New weight {:.2f}. Cut effciency {:.2f}% for MT_2 > 90 cut".format(sum(DataSet.Events_weight),(sum(DataSet.Events_weight)/InitialWeight)*100))
     RemovalDict['Cut l>0'] = SumReturnDict(DataSet)   
     
+    if len(np.unique(DataSet.Label)) == 1:
+        DataSet = DataSet2.copy()
+        print("Unable to cut MT_2 variable.")
+        import time 
+        time.sleep(10)
     ####Clean the jet signals. To remove any soft jets.###
     InitialWeight = sum(DataSet.Events_weight)
     
@@ -184,6 +191,11 @@ def DataCuts(DataSet, DisplayRemoval = False, SaveResults=False):
     #######
     ####### Consider implementing this in a better way #######################
     #######
+    if len(np.unique(CleanedDataSet.Label)) == 1:
+        print('Dataset contains only one label.')
+        print(np.unique(CleanedDataSet.Label))
+        sys.exit('Dataset does not contain signal and background events.')
+        
     return CleanedDataSet
     
 class TreeModel():
@@ -539,7 +551,7 @@ class TreeModel():
              
         
         self.ModelPredictions(self.TestingData)
-        self.Model.save_model('XGBoostModelFile')
+        #self.Model.save_model('XGBoostModelFile')
         #self.TreeDiagram()
         #self.ConfusionPairPlot(self.TestingData.drop(['Events_weight','Label'],axis=1), self.TestingData.Label)
         return self.Model
@@ -550,13 +562,15 @@ class TreeModel():
         DataSet1 = LabelClean(DataSet1)
         Matrix = xgb.DMatrix(DataSet1.drop('Events_weight',axis=1),label=Y,weight=DataSet.Events_weight)
         y_pred = self.Model.predict(Matrix)
-        predictions = [(value > 0.5).astype(int) for value in y_pred]
+        predictions = y_pred > 0.5
         if Metric == 'accuracy':
             accuracy = accuracy_score(Y, predictions)
             print("Accuracy: %.2f%%" % (accuracy * 100.0))
         elif Metric == 'f1':
             _, accuracy = xgb_f1(predictions, Matrix)
             print("F1 Score: %.2f%%" % (accuracy))            
+        elif Metric == 'auc':
+            accuracy = roc_auc_score(Matrix.get_label(), predictions)
         
         GXBoost_confusion = confusion_matrix(Y,predictions,normalize=None,sample_weight=DataSet1.Events_weight)
         print('{} events misclassified as true with an ams score of {}'.format(GXBoost_confusion[0,1], self.AMSScore(DataSet)))
