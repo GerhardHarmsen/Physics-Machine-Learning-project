@@ -31,11 +31,19 @@ NeutralCutOff = 3
 #### Known mass cases
 
 #### SMuon Neutralino mass cases
-NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96, 175, 87, 125, 100, 70, 100, 68, 120, 150, 75, 300, 500, 440, 260]
-SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200, 350, 350, 375, 260, 350, 300, 275, 475, 300, 450, 310, 510, 450, 275]
+#NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96, 175, 87, 125, 100, 70, 100, 68, 120, 150, 75, 300, 500, 440, 260]
+#SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200, 350, 350, 375, 260, 350, 300, 275, 475, 300, 450, 310, 510, 450, 275]
+
+NEUTRALINOMASS=[96, 195, 96, 195]
+SMUONMASS=[200, 200, 400, 400]
 
 #### Locations of the  CSV Files########
-CSVLOCATION = r'G:\CSV'
+#CSVLOCATION = r'G:\CSV'
+#BACKGROUNDEVENTPATH = r'Background_Events\EventData.csv'
+#TESTBACKGROUNDEVENTPATH = r'Background_Events_test\EventData.csv'
+#HYPERPARAMETERLOCATION = r'G:\CSV\HyperparameterDictionary.json'
+
+CSVLOCATION = r'G:\CSV_Test'
 BACKGROUNDEVENTPATH = r'Background_Events\EventData.csv'
 TESTBACKGROUNDEVENTPATH = r'Background_Events_test\EventData.csv'
 HYPERPARAMETERLOCATION = r'G:\CSV\HyperparameterDictionary.json'
@@ -52,9 +60,22 @@ def Test_for_Files():
             StopRun=True
             
     if StopRun:
-        print('Files missing stopping the run')
+        print('Signal files missing stopping the run')
         sys.exit()
-
+    
+    if os.path.exists(os.path.join(CSVLOCATION,BACKGROUNDEVENTPATH)) == False:
+        print('Background event datset is missing.')
+        sys.exit()
+    
+    if os.path.exists(os.path.join(CSVLOCATION,TESTBACKGROUNDEVENTPATH)) == False:
+        print('Background test event datset is missing.')
+        sys.exit()
+    
+    if os.path.exists(os.path.join(HYPERPARAMETERLOCATION)) == False:
+        print('Hyperparameter JSON file not found.')
+        if input("Do you wwant to continue? y/n") == "n":
+            sys.exit()
+        
 
 def SelectLabels_of_interest(Dict,No_of_labels):
     """
@@ -338,6 +359,10 @@ def SaveDictionary(FileName,DictionaryToSave):
     None.
 
     """
+    head, tail = os.path.split(FileName)
+    if os.path.exists(head) == False:
+        os.makedirs(head)
+    
     with open(FileName, "w") as myFile:
         json.dump(DictionaryToSave, myFile)
         
@@ -360,7 +385,7 @@ def RetrieveDictionary(FileLocation):
         return json.load(myFile)
 
     
-def runComparison(SMuon_Neutralino,Saved_Results_Path):
+def runComparison(SMuon_Neutralino):
     """
     Trains the model on the provided database and then compares the model to the other mass cases to determine the generalisablity of the model.
     Saves the results of the comparison in a JSON file called Smuon_Mass_{}_Neutralino_{}_Scores.format(Smuon,Neutralino)
@@ -411,9 +436,7 @@ def runComparison(SMuon_Neutralino,Saved_Results_Path):
             
     XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
     
-    NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96, 175, 87, 125, 100, 70, 100, 68, 120, 150, 75, 300, 500, 440, 260]
-    SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200, 350, 350, 375, 260, 350, 300, 275, 475, 300, 450, 310, 510, 450, 275]
-        
+      
     Results = dict()
         
     for k in range(len(SMUONMASS)):
@@ -436,7 +459,7 @@ def runComparison(SMuon_Neutralino,Saved_Results_Path):
                                                                                 'Signal Weight' : SigWeight}
     DictReturn['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]=Results
     FileName = 'Smuon_Mass_{}_Neutralino_{}_Scores.json'.format(SMuon,Neutralino)
-    Path = os.path.join(ResultsLocation,Score_Results)
+    Path = os.path.join(ResultsLocation,'Exclusion_plot_results')
     SaveDictionary(os.path.join(Path,FileName),DictReturn)  
     return 'Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)
 
@@ -600,11 +623,11 @@ def PCA_Plotter():
             DataSet = pd.concat([BackGroundData,SignalEvents])
             DataSet.sample(frac=1)
 
-            DataSet = DataCuts(DataSet)           
+            #DataSet = DataCuts(DataSet)           
          
-            RenameDataBaseColumns(DataSet)
+            #RenameDataBaseColumns(DataSet)
          
-            PCAPlots = PCAPlotter(DataSet,'Label', DataSet.columns)
+            PCAPlots = PCAPlotter(DataSet,'Label')
             PCAPlots.PCAAnalysis()
          
      elif AllDataSets == 'n':
@@ -613,14 +636,14 @@ def PCA_Plotter():
              try:
                  SmuonMass = int(input('Input the mass of the Smuon you want to investigate.'))
                  NeutralinoMass = int(input('Input the mass of the Neutralino you want to investigate.'))
-                 InputValid = True
+                 InputsValid = True
              except:
                 print("Inputs must be of type int.")
         
          BackGroundData=pd.read_csv(os.path.join(CSVLOCATION,BACKGROUNDEVENTPATH))
          BackGroundData.drop('EventID',axis=1,inplace=True)    
          try:
-             Path = os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMuonMass,NeutralinoMass))
+             Path = os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SmuonMass,NeutralinoMass))
              SignalEvents = pd.read_csv(Path)
 
          except: 
@@ -632,9 +655,10 @@ def PCA_Plotter():
          DataSet = pd.concat([BackGroundData,SignalEvents])
          DataSet.sample(frac=1)
 
-         DataSet = DataCuts(DataSet)           
+         #DataSet = DataCuts(DataSet)           
          
-         RenameDataBaseColumns(DataSet)
+         #RenameDataBaseColumns(DataSet) #### THe renaming part needs to be redone so that we don't have to massive dictionaries in the file.
+         ### Will need to fix this
          
          PCAPlots = PCAPlotter(DataSet,'Label', DataSet.columns)
          PCAPlots.PCAAnalysis()
@@ -654,7 +678,9 @@ def Run_SHAP_PERM_TEST(DataSet, UseF1, paramList = None,Plot_titles=None):
     MeanSHAPValues = XGBModel.SHAPValuePlots(Plot_titles)
     
     
-    MeanPermValues = XGBModel.FeaturePermutation(usePredict_poba=False,Plot_Title=Plot_titles)
+    PermValues = XGBModel.FeaturePermutation(usePredict_poba=False,Plot_Title=Plot_titles)
+    
+    MeanPermValues = {PermValues[i][-1] : PermValues[i][0] for i in range(len(PermValues))}
     
     return MeanSHAPValues, MeanPermValues
     
@@ -685,9 +711,11 @@ def SHAP_Perm_Test(Save_directory,UseF1):
         DataSet = pd.concat([BackGroundData,SignalEvents])
         DataSet.sample(frac=1) 
         
+        DataSet = DataCuts(DataSet)
+        
         JSONParameters = RetrieveDictionary(HYPERPARAMETERLOCATION)
         try:
-            paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]
+            paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])]
         except:
             paramList = {'subsample': 1,
                      'reg_gamma': 0.4,
@@ -733,12 +761,12 @@ def GeneralisabilityTest(ResultsLocation,UseF1):
     
     for i in tqdm(range(len(SMUONMASS))):
         FileName = 'Smuon_Mass_{}_Neutralino_{}_Scores.json'.format(SMUONMASS[i],NEUTRALINOMASS[i])
-        Path = os.path.join(ResultsLocation,'Score_Results')
+        Path = os.path.join(ResultsLocation[0],'Exclusion_plot_results')
         Temp = RetrieveDictionary(os.path.join(Path,FileName))  
         for keys in Temp.keys():
             CombinedDict[keys]=Temp[keys]
     
-    SaveDictionary(os.path.join(ResultsLocation,'Model_Scores.json'),CombinedDict)
+    SaveDictionary(os.path.join(ResultsLocation[0],'Model_Scores.json'),CombinedDict)
 
 def Ratio_Test(UseF1):
     StopRun=False
@@ -767,7 +795,7 @@ def Ratio_Test(UseF1):
       DataSet = pd.concat([BackGroundData,SignalEvents])
       DataSet.sample(frac=1)
       
-      if F1:
+      if UseF1:
           ComparisonF1['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = CompareModelwithandwithoutratios(DataSet,True)
       else:
           ComparisonAUC['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = CompareModelwithandwithoutratios(DataSet,False)
@@ -804,7 +832,7 @@ def Ratio_Test(UseF1):
       #Results['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = dict(zip(Temp[:,3],Temp[:,0])) 
 
       #FeaturePermutationComparisonPlot(Results, PlotTitle='Permutation values for the features in the XGB model', YLabel ='Feature Permutation importance', YAxisTicks = None, Max_No_of_Labels = 10)
-      if F1:
+      if UseF1:
          FeaturePermutationComparisonPlot(ComparisonF1, PlotTitle='AMS score using the F1 metric', YLabel ='AMS score', YAxisTicks = None)
       else:
           FeaturePermutationComparisonPlot(ComparisonAUC, PlotTitle='AMS score using the AUC metric', YLabel ='AMS score', YAxisTicks = None)  
@@ -860,12 +888,12 @@ def Permutation_Plot_test(F1 =False):
 if __name__ == "__main__":
     print("This script will execute all the processes needed to create all the plots in the paper.")
     ################TESTS TO RUN##############################
-    Run_PCA_Plotter = True
+    Run_PCA_Plotter = False
     Run_SHAP_and_Permutation_tests = False
     Run_Generalisability_tests = False
     Run_ratio_and_HT_ST_comparison_tests = False
-    Run_AUC_F1_AMS_comparison_test = False
-    Run_Feature_Permutation_comparison_test = False
+    Run_AUC_F1_AMS_comparison_test = True
+    Run_Feature_Permutation_comparison_test = True
     ################DIRECTORY FOR RESULTS#####################
     Directory_for_Results = r'G:\PPLM_results'
     ##########################################################
@@ -882,7 +910,7 @@ if __name__ == "__main__":
         print('Running test showing the AUC, F1 and AMS scores achieved for the diffirent mass cases.')
     if Run_Feature_Permutation_comparison_test:
         print("Running test comparing the feature permutation values for the diffirent mass cases.")
-    print('Running tests for the following Smuon Nuetralino mass cases:')
+    print('Running tests for the following (Smuon, Nuetralino) mass cases:')
     print([i for i in zip(SMUONMASS,NEUTRALINOMASS)])
     if os.path.isdir(Directory_for_Results):
         print('Results will be saved in {}'.format(Directory_for_Results))
@@ -898,10 +926,10 @@ if __name__ == "__main__":
         PCA_Plotter()
     if Run_SHAP_and_Permutation_tests:
         print("A test to determine SHAP and feature permutation values for each of the columns in the dataset.")
-        SHAP_Perm_Test(Save_directory)
+        SHAP_Perm_Test(Directory_for_Results,UseF1=False)
     if Run_Generalisability_tests:
         print("In this test we train the model using one of the mass cases and then apply the model to the other mass cases to determine the AMS, AUC and F1 scores for that mass case using the trained model.")
-        GeneralisabilityTest()
+        GeneralisabilityTest(Directory_for_Results,False)
         
     if Run_ratio_and_HT_ST_comparison_tests:
         print('Run a test to determine the effect that the ratios and that the HT and ST variables hove on the efficiency of the models.')
@@ -912,11 +940,11 @@ if __name__ == "__main__":
                 Ratio_Test(True)
                 InputCheck = True
             elif UseF1Score == 'AUC':
-                 RatioTest(False)
+                 Ratio_Test(False)
                  InputCheck = True
             elif UseF1Score == 'BOTH':
-                 RatioTest(True)
-                 RatioTest(False)
+                 Ratio_Test(True)
+                 Ratio_Test(False)
                  InputCheck = True
             else:
                 print('Unrecognised input. Please type either "AUC", "F1" or "BOTH"')
