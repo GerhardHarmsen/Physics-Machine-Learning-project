@@ -31,21 +31,14 @@ NeutralCutOff = 3
 #### Known mass cases
 
 #### SMuon Neutralino mass cases
-#NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96, 175, 87, 125, 100, 70, 100, 68, 120, 150, 75, 300, 500, 440, 260]
-#SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200, 350, 350, 375, 260, 350, 300, 275, 475, 300, 450, 310, 510, 450, 275]
+NEUTRALINOMASS=[270, 220, 190, 140, 130, 140, 95, 80, 60, 60, 65, 55, 200, 190, 180, 195, 96, 195, 96, 175, 87, 125, 100, 70, 100, 68, 120, 150, 75, 300, 500, 440, 260]
+SMUONMASS=[360, 320, 290, 240, 240, 420, 500, 400, 510, 200, 210, 250, 450, 500, 400, 400, 400, 200, 200, 350, 350, 375, 260, 350, 300, 275, 475, 300, 450, 310, 510, 450, 275]
 
-NEUTRALINOMASS=[96, 195, 96, 195]
-SMUONMASS=[200, 200, 400, 400]
 
 #### Locations of the  CSV Files########
-#CSVLOCATION = r'G:\CSV'
-#BACKGROUNDEVENTPATH = r'Background_Events\EventData.csv'
-#TESTBACKGROUNDEVENTPATH = r'Background_Events_test\EventData.csv'
-#HYPERPARAMETERLOCATION = r'G:\CSV\HyperparameterDictionary.json'
-
-CSVLOCATION = r'G:\CSV_Test'
+CSVLOCATION = r'G:\CSV_Output_2021-06-25\CSV'
 BACKGROUNDEVENTPATH = r'Background_Events\EventData.csv'
-TESTBACKGROUNDEVENTPATH = r'Background_Events_test\EventData.csv'
+TESTBACKGROUNDEVENTPATH = r'Background_Test_Events\EventData.csv'
 HYPERPARAMETERLOCATION = r'G:\CSV\HyperparameterDictionary.json'
 
 ### Begin function declaration ######
@@ -53,9 +46,7 @@ def Test_for_Files():
     StopRun=False
 
     for i in range(len(SMUONMASS)):
-        try:
-            DataSet = pd.read_csv(os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i])))
-        except:
+        if os.path.exists(os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMUONMASS[i],NEUTRALINOMASS[i]))) == False:
             print('Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{} is missing.'.format(SMUONMASS[i],NEUTRALINOMASS[i]))
             StopRun=True
             
@@ -76,6 +67,23 @@ def Test_for_Files():
         if input("Do you wwant to continue? y/n") == "n":
             sys.exit()
         
+
+def GetHyperParameters(Smuon,Neutralino):
+    JSONParameters = RetrieveDictionary(HYPERPARAMETERLOCATION)
+    try:
+        paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(Smuon,Neutralino)]
+    except:
+        MinDist = 999
+        for i in range(len(SMUONMASS)):
+            dist = np.sqrt((Smuon - SMUONMASS[i])**2 + (Neutralino - NEUTRALINOMASS[i])**2)
+            if dist < MinDist and dist > 0:
+                try: 
+                    paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])]
+                    MinDist = dist
+                except:
+                    print()
+   
+    return paramList
 
 def SelectLabels_of_interest(Dict,No_of_labels):
     """
@@ -384,8 +392,69 @@ def RetrieveDictionary(FileLocation):
     with open(FileLocation, "r") as myFile:
         return json.load(myFile)
 
+def runTrainingAMSScore(SMuon_Neutralino):
+    SMuon, Neutralino, UseF1Score, ResultsLocation = SMuon_Neutralino
+    DictReturn = dict()
+    BackGroundData=pd.read_csv(os.path.join(CSVLOCATION,BACKGROUNDEVENTPATH))
+    BackGroundData.drop('EventID',axis=1,inplace=True)    
+    BackGroundDataTest=pd.read_csv(os.path.join(CSVLOCATION,TESTBACKGROUNDEVENTPATH))
+    BackGroundDataTest.drop('EventID',axis=1,inplace=True)   
+        
+    SignalEvents = pd.read_csv(os.path.join(CSVLOCATION,'Events_PPtoSmuonSmuon_Smuon_Mass_{}_Neutralino_{}\EventData.csv'.format(SMuon,Neutralino)))
+    SignalEvents.drop(['EventID'],axis=1,inplace=True)  
+        
+    DataSet = pd.concat([BackGroundData,SignalEvents])
+    DataSet.sample(frac=1)
+            
+    DataSet = DataCuts(DataSet)
+            
+    RenameDataBaseColumns(DataSet)
+            
+    JSONParameters = RetrieveDictionary(HYPERPARAMETERLOCATION)
+    try:
+        paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]
+    except:
+        paramList = {'subsample': 1,
+                     'reg_gamma': 0.4,
+                     'reg_alpha': 0.1,
+                     'n_estimators': 200,
+                     'min_split_loss': 2,
+                     'min_child_weight': 5,
+                     'max_depth': 5,
+                     'learning_rate': 0.1}
+
+    paramList = {'subsample': 1,
+                     'reg_gamma': 0.4,
+                     'reg_alpha': 0.1,
+                     'n_estimators': 200,
+                     'min_split_loss': 2,
+                     'min_child_weight': 5,
+                     'max_depth': 5,
+                     'learning_rate': 0.1}
     
-def runComparison(SMuon_Neutralino):
+        
+    XGBModel = TreeModel(DataSet,paramList = paramList,ApplyDataCut=False) 
+            
+    XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
+    
+    AMSTrainScore = XGBModel.AMSScore(XGBModel.TrainingData,0.5)
+    AMSTestingScore = XGBModel.AMSScore(XGBModel.TestingData,0.5)
+      
+    
+    DictReturn['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)] = { 'AMS Score Training' : AMSTrainScore,
+                                                                           'AMS Score Testing ' :AMSTestingScore}
+       
+
+    FileName = 'Smuon_Mass_{}_Neutralino_{}_Scores.json'.format(SMuon,Neutralino)
+    Path = os.path.join(ResultsLocation,'AMS_Train_Test_Score')
+    SaveDictionary(os.path.join(Path,FileName),DictReturn)   
+    
+    
+    return 'Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)
+    
+
+
+def runComparison(SMuon_Neutralino, paramList = None):
     """
     Trains the model on the provided database and then compares the model to the other mass cases to determine the generalisablity of the model.
     Saves the results of the comparison in a JSON file called Smuon_Mass_{}_Neutralino_{}_Scores.format(Smuon,Neutralino)
@@ -418,24 +487,22 @@ def runComparison(SMuon_Neutralino):
             
     RenameDataBaseColumns(DataSet)
             
-    JSONParameters = RetrieveDictionary(HYPERPARAMETERLOCATION)
-    try:
-        paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]
-    except:
-        paramList = {'subsample': 1,
-                     'reg_gamma': 0.4,
-                     'reg_alpha': 0.1,
-                     'n_estimators': 200,
-                     'min_split_loss': 2,
-                     'min_child_weight': 5,
-                     'max_depth': 5,
-                     'learning_rate': 0.1}
-        
-        
+    if paramList == None:
+        paramList = GetHyperParameters(SMuon,Neutralino)
+        #try:
+        #    paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]
+        #except:
+        #    ApproxMass = AproxHyperParameters(SMuon,Neutralino)
+        #    paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(ApproxMass[0],ApproxMass[1])]
+
+
     XGBModel = TreeModel(DataSet,paramList = paramList,ApplyDataCut=False) 
             
     XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
     
+    #XGBModel.XGBoostTrain(['ams@0.15'])
+    
+    SelfTestScore = XGBModel.AMSScore(XGBModel.TestingData,Threshold=0.5)
       
     Results = dict()
         
@@ -449,11 +516,19 @@ def runComparison(SMuon_Neutralino):
             DataSet = DataCuts(DataSet)
     
             RenameDataBaseColumns(DataSet)
-        
+            
             F1Score = XGBModel.ModelPredictions(DataSet, Metric='f1')
             AUCScores = XGBModel.ModelPredictions(DataSet, Metric='auc')
             SigWeight = DataSet.Events_weight[DataSet.Label == 1].sum()
-            Results['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])] = {'AMS Score' :XGBModel.AMSScore(DataSet),
+            Threshold=0.5
+            if SMUONMASS[k] == SMuon:
+                Score = SelfTestScore
+            else:
+                Score = XGBModel.AMSScore(DataSet,Threshold=Threshold)
+
+            
+            Results['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[k],NEUTRALINOMASS[k])] = {
+                                                                                'AMS Score' :Score,
                                                                                 'F1 Score' : F1Score,
                                                                                 'auc Score' : AUCScores,
                                                                                 'Signal Weight' : SigWeight}
@@ -498,7 +573,7 @@ def SHAP_Perm_Test(ResultsLocation):
 
 def CompareModelwithandwithoutratios(DataSet,UseF1Score=False):
     #### Train model
-    
+    Threshold = 0.9
     JSONParameters = RetrieveDictionary(HYPERPARAMETERLOCATION)
     try:
         paramList = JSONParameters['Smuon_Mass_{}_Neutralino_{}'.format(SMuon,Neutralino)]
@@ -512,14 +587,7 @@ def CompareModelwithandwithoutratios(DataSet,UseF1Score=False):
                      'max_depth': 5,
                      'learning_rate': 0.1}
         
-    paramList = {'subsample': 1,
-                     'reg_gamma': 0.4,
-                     'reg_alpha': 0.1,
-                     'n_estimators': 200,
-                     'min_split_loss': 2,
-                     'min_child_weight': 5,
-                     'max_depth': 5,
-                     'learning_rate': 0.1}    
+    
     DataSet = DataCuts(DataSet)
           
     XGBModel = TreeModel(DataSet,ApplyDataCut=False,  paramList=paramList) 
@@ -537,11 +605,13 @@ def CompareModelwithandwithoutratios(DataSet,UseF1Score=False):
     #XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
     
     AMSScore = dict()
-    Score = XGBModel.AMSScore(DataSet,Threshold=0.99)
-    if Score == 0: 
-        AMSScore['All_features'] = XGBModel.AMSScore(XGBModel.TestingData,Threshold=0.9)
-    else:
-        AMSScore['All_features'] = Score
+    Score = XGBModel.AMSScore(DataSet,Threshold=Threshold)
+    while Score == 0:
+        Threshold = Threshold - 0.1
+        print(Threshold)
+        Score = XGBModel.AMSScore(DataSet,Threshold=Threshold)
+    
+    AMSScore['All_features'] = Score
     
     ### No HT
     
@@ -565,11 +635,12 @@ def CompareModelwithandwithoutratios(DataSet,UseF1Score=False):
     #XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
     
     
-    Score = XGBModel.AMSScore(DataSet2,Threshold=0.99)
-    if Score == 0: 
-        AMSScore['NO_HT'] = XGBModel.AMSScore(XGBModel.TestingData,Threshold=0.9)
-    else:
-        AMSScore['NO_HT'] = Score
+    Score = XGBModel.AMSScore(DataSet2,Threshold=Threshold)
+    while Score == 0:
+        Threshold = Threshold - 0.1
+        Score =  XGBModel.AMSScore(DataSet2,Threshold=Threshold)
+    
+    AMSScore['NO_HT'] = Score
     
     ### Noratios
      
@@ -596,11 +667,12 @@ def CompareModelwithandwithoutratios(DataSet,UseF1Score=False):
     #XGBModel = TreeModel(NewDataSet,paramList = paramList,ApplyDataCut=False)
     #XGBModel.XGBoostTrain(UseF1Score=UseF1Score)
     
-    Score = XGBModel.AMSScore(DataSet2,Threshold=0.99)
-    if Score == 0: 
-        AMSScore['NO_ratio'] = XGBModel.AMSScore(XGBModel.TestingData,Threshold=0.9)
-    else:
-        AMSScore['NO_ratio'] = Score
+    Score = XGBModel.AMSScore(DataSet2,Threshold=Threshold)
+    while Score == 0: 
+        Threshold = Threshold - 0.1
+        Score = XGBModel.AMSScore(DataSet2,Threshold=Threshold)
+    
+    AMSScore['NO_ratio'] = Score
     
     
     return AMSScore
@@ -765,8 +837,36 @@ def GeneralisabilityTest(ResultsLocation,UseF1):
         Temp = RetrieveDictionary(os.path.join(Path,FileName))  
         for keys in Temp.keys():
             CombinedDict[keys]=Temp[keys]
+    SaveDictionary(os.path.join(ResultsLocation[0],'Model_Scores_AMS.json'),CombinedDict)
+    if UseF1[0]:
+        SaveDictionary(os.path.join(ResultsLocation[0],'Model_Scores_F1.json'),CombinedDict)
+    else:
+        SaveDictionary(os.path.join(ResultsLocation[0],'Model_Scores_AUC.json'),CombinedDict)
+
+def AMSScoreTrainTest(ResultsLocation,UseF1):
+    UseF1 = [UseF1] * len(SMUONMASS)   
+    ResultsLocation = [ResultsLocation] * len(SMUONMASS)
+    ZippedData = zip(SMUONMASS,NEUTRALINOMASS, UseF1, ResultsLocation)
+    with Pool(NoofCPU) as pool:
+         r = list(tqdm(pool.imap(runTrainingAMSScore,[Event for Event in ZippedData]),total=len(SMUONMASS)))
     
-    SaveDictionary(os.path.join(ResultsLocation[0],'Model_Scores.json'),CombinedDict)
+    pool.close()
+    pool.join()
+    
+    CombinedDict = dict()
+    
+    print('Combining dictionary results')
+    
+    for i in tqdm(range(len(SMUONMASS))):
+        FileName = 'Smuon_Mass_{}_Neutralino_{}_Scores.json'.format(SMUONMASS[i],NEUTRALINOMASS[i])
+        Path = os.path.join(ResultsLocation[0],'AMS_Train_Test_Score')
+        Temp = RetrieveDictionary(os.path.join(Path,FileName))  
+        for keys in Temp.keys():
+            CombinedDict[keys]=Temp[keys]
+    if UseF1[0]:
+        SaveDictionary(os.path.join(ResultsLocation[0],'AMS_Scores_F1.json'),CombinedDict)
+    else:
+        SaveDictionary(os.path.join(ResultsLocation[0],'AMS_Scores_AUC.json'),CombinedDict)
 
 def Ratio_Test(UseF1):
     StopRun=False
@@ -832,9 +932,9 @@ def Ratio_Test(UseF1):
       #Results['Smuon_Mass_{}_Neutralino_{}'.format(SMUONMASS[i],NEUTRALINOMASS[i])] = dict(zip(Temp[:,3],Temp[:,0])) 
 
       #FeaturePermutationComparisonPlot(Results, PlotTitle='Permutation values for the features in the XGB model', YLabel ='Feature Permutation importance', YAxisTicks = None, Max_No_of_Labels = 10)
-      if UseF1:
+    if UseF1:
          FeaturePermutationComparisonPlot(ComparisonF1, PlotTitle='AMS score using the F1 metric', YLabel ='AMS score', YAxisTicks = None)
-      else:
+    else:
           FeaturePermutationComparisonPlot(ComparisonAUC, PlotTitle='AMS score using the AUC metric', YLabel ='AMS score', YAxisTicks = None)  
 
 def Permutation_Plot_test(F1 =False):
@@ -892,8 +992,9 @@ if __name__ == "__main__":
     Run_SHAP_and_Permutation_tests = False
     Run_Generalisability_tests = False
     Run_ratio_and_HT_ST_comparison_tests = False
-    Run_AUC_F1_AMS_comparison_test = True
-    Run_Feature_Permutation_comparison_test = True
+    Run_AUC_F1_AMS_comparison_test = False
+    Run_Feature_Permutation_comparison_test = False
+    AMSScoreTrainTest_check = False
     ################DIRECTORY FOR RESULTS#####################
     Directory_for_Results = r'G:\PPLM_results'
     ##########################################################
@@ -910,6 +1011,8 @@ if __name__ == "__main__":
         print('Running test showing the AUC, F1 and AMS scores achieved for the diffirent mass cases.')
     if Run_Feature_Permutation_comparison_test:
         print("Running test comparing the feature permutation values for the diffirent mass cases.")
+    if AMSScoreTrainTest_check:
+        print('Running test for the AMS training score and the testing score.')
     print('Running tests for the following (Smuon, Nuetralino) mass cases:')
     print([i for i in zip(SMUONMASS,NEUTRALINOMASS)])
     if os.path.isdir(Directory_for_Results):
@@ -929,7 +1032,7 @@ if __name__ == "__main__":
         SHAP_Perm_Test(Directory_for_Results,UseF1=False)
     if Run_Generalisability_tests:
         print("In this test we train the model using one of the mass cases and then apply the model to the other mass cases to determine the AMS, AUC and F1 scores for that mass case using the trained model.")
-        GeneralisabilityTest(Directory_for_Results,False)
+        GeneralisabilityTest(Directory_for_Results,True)
         
     if Run_ratio_and_HT_ST_comparison_tests:
         print('Run a test to determine the effect that the ratios and that the HT and ST variables hove on the efficiency of the models.')
@@ -968,7 +1071,8 @@ if __name__ == "__main__":
             else:
                 print('Unrecognised input. Please type either "AUC", "F1" or "BOTH"')
 
-    
+    if AMSScoreTrainTest_check:
+        AMSScoreTrainTest(Directory_for_Results,True)
 
 
 def compareAllCases():

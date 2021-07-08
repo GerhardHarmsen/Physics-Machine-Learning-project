@@ -57,14 +57,14 @@ def ConfusionMatrixPlot(ConfusionResults, ListFeatures, ListCoeffs):
 def inverse_xgb_f1(y, t, threshold=0.5):
     t = t.get_label()
     y_bin = (y > threshold).astype(int) # works for both type(y) == <class 'numpy.ndarray'> and type(y) == <class 'pandas.core.series.Series'>
-    Recall, Precision, F1, Avg = precision_recall_fscore_support(t, y_bin, beta=0.01, average = 'binary')
+    Recall, Precision, F1, Avg = precision_recall_fscore_support(t, y_bin, beta=0.01, average = 'binary', zero_division = 0)
     #return 'f1',(1 - f1_score(t,y_bin))
     return 'f1',(1-F1)
     
 def xgb_f1(y, t, threshold=0.5):
     t = t.get_label()
     y_bin = (y > threshold).astype(int) # works for both type(y) == <class 'numpy.ndarray'> and type(y) == <class 'pandas.core.series.Series'>
-    Recall, Precision, F1, Avg = precision_recall_fscore_support(t, y_bin, beta=0.01, average = 'binary')
+    Recall, Precision, F1, Avg = precision_recall_fscore_support(t, y_bin, beta=0.01, average = 'binary', zero_division = 0)
     #return 'f1',f1_score(t,y_bin)
     return 'f1', F1
     
@@ -306,6 +306,8 @@ class TreeModel():
         
         results = []
         
+        Total = len(param_dict)
+        
         for i, d in enumerate(param_dict):
             model = xgb.XGBClassifier(objective = "binary:logistic",
                                   n_estimators=BOOST_ROUNDS,
@@ -321,8 +323,12 @@ class TreeModel():
             metric, metric_std, best_iteration = self.my_cv(df, predictors, response, kfolds, model, verbose=False)    
             results.append([metric, metric_std, best_iteration, d])
             if i % 100 == 0:
-                print("%s %3d result mean: %.6f std: %.6f, iter: %.2f" % (datetime.strftime(datetime.now(), "%T"), i, metric, metric_std, best_iteration))
-        
+                print("%s %3d of %3d result mean: %.6f std: %.6f, iter: %.2f" % (datetime.strftime(datetime.now(), "%T"), i, Total, metric, metric_std, best_iteration))
+                if i % 1000 == 0 and i != 0:
+                    DeltaTime = (datetime.now()-start_time).seconds
+                    TimeperIter = round(DeltaTime/i)
+                    EstimateLeft = timedelta(seconds=((Total - i) * TimeperIter))
+                    print("%s %3d time taken: %s seconds per iteration: %s predicted time left: %s" % (datetime.strftime(datetime.now(), '%T'), i, str(timedelta(seconds=(datetime.now()-start_time).seconds)), TimeperIter, str(EstimateLeft)))
         end_time = datetime.now()
         print("%-20s %s" % ("Start Time", start_time))
         print("%-20s %s" % ("End Time", end_time))
@@ -357,18 +363,18 @@ class TreeModel():
         from itertools import product
         RANDOMSTATE = 2012
         
-        
+        NumberofTests = 8
         kfolds = KFold(n_splits=10, shuffle=True, random_state=RANDOMSTATE)
         
-        current_params = {'max_depth': 5,
-                          'colsample_bytree': 0.5,
-                          'colsample_bylevel': 0.5,
-                          'subsample': 0.5,
-                          'learning_rate': 0.01,
-                              }       
+        current_params = {'subsample': 1,
+                     'reg_alpha': 0.1,
+                     'min_split_loss': 2,
+                     'min_child_weight': 5,
+                     'max_depth': 5,
+                     'learning_rate': 0.1}
                 
        	
-        df = self.TrainingData.sample(frac=0.5)
+        df = self.TrainingData.sample(frac=1)
         
         
         response = 'Label'
@@ -389,18 +395,13 @@ class TreeModel():
         ##################################################
         # round 2: tune subsample, colsample_bytree, colsample_bylevel
         ##################################################
-        subsamples = np.linspace(0.01, 1.0, 10)
-        colsample_bytrees = np.linspace(0.1, 1.0, 10)
-        colsample_bylevel = np.linspace(0.1, 1.0, 10)
-        # narrower search
-        # subsamples = np.linspace(0.25, 0.75, 11)
-        # colsample_bytrees = np.linspace(0.1, 0.3, 5)
-        # colsample_bylevel = np.linspace(0.1, 0.3, 5)
-        # subsamples = np.linspace(0.4, 0.9, 11)
-        # colsample_bytrees = np.linspace(0.05, 0.25, 5)
+        subsamples = np.linspace(0.01, 1.0, NumberofTests)
+        reg_alpha = np.linspace(0.1, 1.0, NumberofTests)
+        min_child_weight = np.linspace(1,5,NumberofTests)
+        min_split_loss = np.linspace(0,5,NumberofTests)
             
-        grid_search_dicts = [dict(zip(['subsample', 'colsample_bytree', 'colsample_bylevel'], [a, b, c])) 
-                             for a,b,c in product(subsamples, colsample_bytrees, colsample_bylevel)]
+        grid_search_dicts = [dict(zip(['subsample', 'reg_alpha', 'min_child_weight', 'min_split_loss'], [a, b, c, d])) 
+                             for a,b,c,d in product(subsamples, reg_alpha, min_child_weight, min_split_loss)]
         # merge into full param dicts
         full_search_dicts = [{**current_params, **d} for d in grid_search_dicts]
         # cv and get best params
@@ -509,6 +510,7 @@ class TreeModel():
         """
         # split data into train and test sets
         num_round = 2000
+        EARLY_STOPPING = 10
         dtrain = xgb.DMatrix(self.TrainingData.drop(['Events_weight','Label'],axis =1),
                              label=self.TrainingData.Label,
                              weight=self.TrainingData.Events_weight)
@@ -536,27 +538,51 @@ class TreeModel():
         for i in AdjustWeights:
            paramList['scale_pos_weight'] = sum_wneg/sum_wpos * i
            if UseF1Score:
-               self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=100, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False,  maximize = True)
+               self.Model = xgb.train(paramList,
+                                      dtrain = dtrain,
+                                      num_boost_round=100,
+                                      feval = xgb_f1,
+                                      evals = watchlist,
+                                      early_stopping_rounds= EARLY_STOPPING,
+                                      verbose_eval= False,
+                                      maximize = True)
            else:
-              self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=100, evals = watchlist, early_stopping_rounds= 50, verbose_eval= False)
+              self.Model = xgb.train(paramList,
+                                     dtrain = dtrain,
+                                     num_boost_round=100,
+                                     evals = watchlist,
+                                     early_stopping_rounds= EARLY_STOPPING,
+                                     verbose_eval= False)
            Results.append(self.Model.best_score)
         print('Weight Adjust complete')
         print('Adjusting the weight by {}'.format(AdjustWeights[Results.index(max(Results))]))
         paramList['scale_pos_weight'] = sum_wneg/sum_wpos * AdjustWeights[Results.index(max(Results))]
         #paramList['scale_pos_weight'] = sum_wneg/sum_wpos * 0.00001
         if UseF1Score:
-            self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, feval = xgb_f1, evals = watchlist, early_stopping_rounds= 50, verbose_eval= True, maximize = True)
+            self.Model = xgb.train(paramList,
+                                   dtrain = dtrain,
+                                   num_boost_round=num_round,
+                                   feval = xgb_f1,
+                                   evals = watchlist,
+                                   early_stopping_rounds= EARLY_STOPPING,
+                                   verbose_eval= True,
+                                   maximize = True)
         else:
-            self.Model = xgb.train(paramList, dtrain = dtrain,num_boost_round=num_round, evals = watchlist, early_stopping_rounds= 50, verbose_eval= True)
-             
+            self.Model = xgb.train(paramList,
+                                   dtrain = dtrain,
+                                   num_boost_round=num_round,
+                                   evals = watchlist,
+                                   early_stopping_rounds= EARLY_STOPPING,
+                                   verbose_eval= True)
+                
         
-        self.ModelPredictions(self.TestingData)
+        self.ModelPredictions(self.TestingData,show=False)
         #self.Model.save_model('XGBoostModelFile')
         #self.TreeDiagram()
         #self.ConfusionPairPlot(self.TestingData.drop(['Events_weight','Label'],axis=1), self.TestingData.Label)
         return self.Model
     
-    def ModelPredictions(self,DataSet,Metric='accuracy'):
+    def ModelPredictions(self,DataSet,Metric='accuracy',show=True):
         DataSet1 = DataSet.copy()
         Y = DataSet1.Label
         DataSet1 = LabelClean(DataSet1)
@@ -574,12 +600,12 @@ class TreeModel():
         
         GXBoost_confusion = confusion_matrix(Y,predictions,normalize=None,sample_weight=DataSet1.Events_weight)
         print('{} events misclassified as true with an ams score of {}'.format(GXBoost_confusion[0,1], self.AMSScore(DataSet)))
-        
-        sns.heatmap(GXBoost_confusion,annot=True)
-        plt.xlabel('Predicted value')
-        plt.ylabel('True value')
-        plt.title("XGBoost")
-        plt.show()
+        if show: 
+            sns.heatmap(GXBoost_confusion,annot=True)
+            plt.xlabel('Predicted value')
+            plt.ylabel('True value')
+            plt.title("XGBoost")
+            plt.show()
         
         return accuracy
         
@@ -602,13 +628,21 @@ class TreeModel():
                b.append(DataSet.Events_weight.iloc[i])
     
         print('Number of correctly classified signal events {}. Number of misclassified background events {}'.format(len(s),len(b)))
-        print('Percentage of signal events correctly identified {:.2f}. Number of background events incorrectly identified {:.2f}'.format((len(s)/TotalSignal)*100,(len(b)/TotalBackground)*100))
+        try:
+            print('Percentage of signal events correctly identified {:.2f}. Number of background events incorrectly identified {:.2f}'.format((len(s)/TotalSignal)*100,(len(b)/TotalBackground)*100))
+        except: 
+            if TotalSignal == 0:
+                print('No signal found')
+            elif TotalBackground == 0:
+                print('No background found')
         signal = sum(s)
         background = sum(b)
         #signal = len(s)
         #background = len(b)
-        if background<=0 or signal<=0:
+        if signal <= 0 :
                 return 0
+        elif background <= 0:
+            return 10
         try:
             return signal/np.sqrt(background)
             #return np.sqrt(2*((signal+background)*np.log(1+float(signal)/background)-signal))
