@@ -33,7 +33,7 @@ def HyperParameters(Smuon_Mass, Neutralino_Mass,SignalEventCSV,BackgroundCSV,Noo
     XGBModel = TreeModel(DataSet,ApplyDataCut=False)
     
     
-    XGBModel.HyperParameterTuning(NoofTests,Noof_jobs)
+    XGBModel.HyperParameterTuning(NoofTests,Noof_jobs,SignalEventPath)
 
     HyperParameterResults = XGBModel.HyperParameters
     

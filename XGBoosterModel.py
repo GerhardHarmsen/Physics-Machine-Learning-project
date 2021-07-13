@@ -197,6 +197,18 @@ def DataCuts(DataSet, DisplayRemoval = False, SaveResults=False):
         sys.exit('Dataset does not contain signal and background events.')
         
     return CleanedDataSet
+
+def WriteUpdateFile(FileLocation, String,CreateNew=False):
+    FileLocation  = os.path.join(FileLocation,'Progress.txt')
+    if CreateNew:
+       f = open(FileLocation, "w")
+       f.write(String + '\n')
+    else: 
+       f = open(FileLocation, "a")        
+       f.write(String + '\n')
+     
+    f.close()
+
     
 class TreeModel():
     def __init__(self,DataSet,paramList = None, ApplyDataCut = True):
@@ -292,7 +304,7 @@ class TreeModel():
             best_iterations.append(classifier.best_iteration)
         return np.average(metrics), np.std(metrics), np.average(best_iterations)
         
-    def cv_over_param_dict(self, df, param_dict, predictors, response, kfolds, verbose=False):
+    def cv_over_param_dict(self, df, param_dict, predictors, response, kfolds, verbose=False, ProgressUpdateFile =None):
         """given a list of dictionaries of xgb params
         run my_cv on params, store result in array
         return updated param_dict, results dataframe
@@ -323,7 +335,13 @@ class TreeModel():
             metric, metric_std, best_iteration = self.my_cv(df, predictors, response, kfolds, model, verbose=False)    
             results.append([metric, metric_std, best_iteration, d])
             if i % 100 == 0:
-                print("%s %3d of %3d result mean: %.6f std: %.6f, iter: %.2f" % (datetime.strftime(datetime.now(), "%T"), i, Total, metric, metric_std, best_iteration))
+                String = "%s %3d of %3d result mean: %.6f std: %.6f, iter: %.2f" % (datetime.strftime(datetime.now(), "%T"), i, Total, metric, metric_std, best_iteration)
+                
+                if ProgressUpdateFile == None:
+                    print(String)
+                else: 
+                    print(String)
+                    WriteUpdateFile(ProgressUpdateFile,String) 
                 if i % 1000 == 0 and i != 0:
                     DeltaTime = (datetime.now()-start_time).seconds
                     TimeperIter = round(DeltaTime/i)
@@ -341,7 +359,7 @@ class TreeModel():
         return best_params, results_df    
 
 
-    def HyperParameterTuning(self, NoofTests = 200, No_jobs = -1):
+    def HyperParameterTuning(self, NoofTests = 200, No_jobs = -1,ProgressUpdateFile=None):
         """
         Function for selecting the optimum values for the hyperparmeters to use for the XGBoost model.
 
@@ -380,6 +398,7 @@ class TreeModel():
         response = 'Label'
         predictors = df.drop(['Events_weight','Label'],axis=1).columns
         
+        
         ##################################################
         # round 1: tune depth
         ##################################################
@@ -391,7 +410,7 @@ class TreeModel():
         # cv and get best params
         current_params, results_df = self.cv_over_param_dict(df, full_search_dicts, predictors, response, kfolds)
         
-                
+        WriteUpdateFile(ProgressUpdateFile,'Round 1 completed',True)
         ##################################################
         # round 2: tune subsample, colsample_bytree, colsample_bylevel
         ##################################################
@@ -405,8 +424,8 @@ class TreeModel():
         # merge into full param dicts
         full_search_dicts = [{**current_params, **d} for d in grid_search_dicts]
         # cv and get best params
-        current_params, results_df = self.cv_over_param_dict(df, full_search_dicts, predictors, response, kfolds)
-        
+        current_params, results_df = self.cv_over_param_dict(df, full_search_dicts, predictors, response, kfolds, ProgressUpdateFile=ProgressUpdateFile)
+        WriteUpdateFile(ProgressUpdateFile,'Round 2 completed')
         # round 3: learning rate
         learning_rates = np.logspace(-3, -1, 5)
         grid_search_dicts = [{'learning_rate': lr} for lr in learning_rates]
@@ -415,7 +434,7 @@ class TreeModel():
 
         # cv and get best params
         current_params, results_df = self.cv_over_param_dict(df, full_search_dicts, predictors, response, kfolds, verbose=False)
-        
+        WriteUpdateFile(ProgressUpdateFile,'Hyperparameter tuning completed.')
         self.HyperParameters = current_params
         
               
